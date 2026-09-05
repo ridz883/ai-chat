@@ -1,17 +1,21 @@
 {
   "name": "RZchat AI",
   "short_name": "RZchat",
-  "description": "Minimalist AI Workspace & Chat",
+  "description": "Minimalist AI Workspace",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "https://api.iconify.design/lucide:bot.svg?color=%23000000",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "https://dummyimage.com/192x192/000000/ffffff.png&text=RZ",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://dummyimage.com/512x512/000000/ffffff.png&text=RZ",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
