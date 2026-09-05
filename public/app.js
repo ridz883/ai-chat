@@ -528,7 +528,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- FITUR VOICE CALL TELEPON DUA ARAH (ANTI-AUDIO LOCK) ---
+// --- FITUR VOICE CALL TELEPON DUA ARAH (ANTI-ECHO & JEDA BICARA NATURAL) ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -541,6 +541,8 @@ let callInterval = null;
 let callSeconds = 0;
 let callRecognition = null;
 let isAiSpeaking = false;
+let silenceTimer = null;
+let accumulatedUserSpeech = '';
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -557,28 +559,39 @@ if (SR) {
   };
 
   callRecognition.onresult = (e) => {
+    // 1. Tolak semua input suara jika AI sedang berbicara (Cegah gema speaker HP)
     if (!isCalling || isAiSpeaking) return;
 
-    let interimTranscript = '';
-    let finalTranscript = '';
+    let interim = '';
+    let final = '';
 
     for (let i = e.resultIndex; i < e.results.length; ++i) {
       if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript;
+        final += e.results[i][0].transcript;
       } else {
-        interimTranscript += e.results[i][0].transcript;
+        interim += e.results[i][0].transcript;
       }
     }
 
-    const currentHeard = finalTranscript || interimTranscript;
-    if (currentHeard.trim()) {
-      callLiveText.textContent = `Anda: "${currentHeard}"`;
-    }
+    const currentSpoken = (final || interim).trim();
 
-    if (finalTranscript.trim()) {
-      try { callRecognition.stop(); } catch (_) {}
-      callStatus.textContent = 'AI sedang berpikir...';
-      sendVoiceToAI(finalTranscript.trim());
+    // Abaikan suara desah / kresek yang terlalu pendek
+    if (currentSpoken.length > 1) {
+      callLiveText.textContent = `Anda: "${currentSpoken}"`;
+      accumulatedUserSpeech = currentSpoken;
+
+      // 2. Debounce jeda 1.2 detik (Menunggu jeda diam tanda selesai bicara)
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
+          const textToSend = accumulatedUserSpeech.trim();
+          accumulatedUserSpeech = '';
+
+          try { callRecognition.stop(); } catch (_) {}
+          callStatus.textContent = 'AI sedang berpikir...';
+          sendVoiceToAI(textToSend);
+        }
+      }, 1200);
     }
   };
 
@@ -587,7 +600,7 @@ if (SR) {
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
       setTimeout(() => {
         try { callRecognition.start(); } catch (_) {}
-      }, 300);
+      }, 400);
     }
   };
 
@@ -595,7 +608,7 @@ if (SR) {
     if (isCalling && !isAiSpeaking) {
       setTimeout(() => {
         try { callRecognition.start(); } catch (_) {}
-      }, 300);
+      }, 400);
     }
   };
 }
@@ -611,6 +624,7 @@ callBtn.addEventListener('click', () => {
 function startCall() {
   isCalling = true;
   isAiSpeaking = false;
+  accumulatedUserSpeech = '';
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
@@ -630,6 +644,7 @@ hangupBtn.addEventListener('click', endCall);
 function endCall() {
   isCalling = false;
   isAiSpeaking = false;
+  clearTimeout(silenceTimer);
   clearInterval(callInterval);
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (callRecognition) {
@@ -689,9 +704,12 @@ async function sendVoiceToAI(text) {
 function speakCallResponse(text) {
   if (!('speechSynthesis' in window) || !isCalling) return;
 
+  // Kunci mikrofon: matikan pendengar suara saat AI mulai bicara
   window.speechSynthesis.cancel();
   isAiSpeaking = true;
   callStatus.textContent = 'AI sedang berbicara...';
+
+  try { callRecognition.stop(); } catch (_) {}
 
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
@@ -702,11 +720,14 @@ function speakCallResponse(text) {
 
   const resumeListening = () => {
     if (!isCalling) return;
-    isAiSpeaking = false;
-    callStatus.textContent = 'Mendengarkan Anda...';
-    try {
-      callRecognition.start();
-    } catch (_) {}
+    
+    // Jeda buffer 600ms agar gema speaker benar-benar hilang sebelum mic mendengarkan lagi
+    setTimeout(() => {
+      isAiSpeaking = false;
+      accumulatedUserSpeech = '';
+      callStatus.textContent = 'Mendengarkan Anda...';
+      try { callRecognition.start(); } catch (_) {}
+    }, 600);
   };
 
   utter.onend = resumeListening;
