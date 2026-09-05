@@ -8,13 +8,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // API Key & konfigurasi langsung tertanam aman di serverless backend
   const apiKey = "sk-xt-f8c8a9432ddccf472ad7210961813d6d62f1a28e98f4440b";
-  const { messages } = req.body;
+  const { messages, model } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Messages payload is required' });
   }
+
+  // Gunakan model yang dipilih user atau fallback ke default
+  const selectedModel = model || 'qwen/qwen3.8-max:free';
 
   try {
     const upstreamResponse = await fetch('https://api.xkiro.com/v1/chat/completions', {
@@ -24,7 +26,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'qwen/qwen3.8-max:free',
+        model: selectedModel,
         messages: messages,
         stream: true,
       }),
