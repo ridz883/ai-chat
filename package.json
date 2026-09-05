@@ -1,0 +1,10 @@
+{
+  "name": "chat-ai-workspace",
+  "version": "1.0.0",
+  "description": "Fullstack AI Chat with Voice, PDF, and Image OCR deployed on Vercel",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {}
+}
