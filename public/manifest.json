@@ -8,14 +8,10 @@
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "https://dummyimage.com/192x192/000000/ffffff.png&text=RZ",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "https://dummyimage.com/512x512/000000/ffffff.png&text=RZ",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
