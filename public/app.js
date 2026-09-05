@@ -1,6 +1,6 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// --- PWA SERVICE WORKER ---
+// --- PWA SERVICE WORKER REGISTRATION ---
 let deferredPrompt = null;
 const installBtn = document.getElementById('install-btn');
 
@@ -23,7 +23,7 @@ installBtn.addEventListener('click', async () => {
   }
 });
 
-// --- SESSION & STORAGE MANAGEMENT ---
+// --- SESSION STORAGE CONFIGURATION ---
 const SESSIONS_KEY = 'rzchat_sessions';
 const ACTIVE_SESSION_KEY = 'rzchat_active_id';
 const MODEL_KEY = 'rzchat_selected_model';
@@ -124,7 +124,7 @@ userInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Render drawer sessions
+// Render Drawer Sessions
 function renderSessionList() {
   sessionList.innerHTML = '';
   sessions.forEach(s => {
@@ -182,7 +182,7 @@ function loadCurrentChat() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- VOICE NOTES / STT ---
+// --- VOICE NOTES / STT (REGULER CHAT) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
@@ -217,7 +217,7 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- FILE UPLOAD (VISION BASE64 & PDF) ---
+// --- FILE UPLOAD (MULTIMODAL BASE64 & PDF) ---
 fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -279,7 +279,7 @@ removeAttachmentBtn.addEventListener('click', () => {
   thumbPreview.classList.add('hidden');
 });
 
-// --- SUBMIT PESAN, REALTIME TYPING & ANIMASI LOADING ---
+// --- SUBMIT PESAN CHAT ---
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
@@ -332,17 +332,16 @@ chatForm.addEventListener('submit', async (e) => {
   await requestAIResponse();
 });
 
-// Fungsi Eksekusi Response dengan Streaming Realtime + Video Loader
+// Eksekusi Respon Streaming + Realtime Typing & Video Loader
 async function requestAIResponse(isRegenerate = false) {
   const session = getCurrentSession();
-  const aiBubble = appendAiBubble(true, true); // true = include video animasi
+  const aiBubble = appendAiBubble(true, true);
   sendBtn.disabled = true;
   stopContainer.classList.remove('hidden');
 
   currentAbortController = new AbortController();
   let fullRes = '';
 
-  // Gabungkan riwayat chat dengan system prompt jika ada
   let payloadMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
   const customSystemPrompt = systemPromptInput.value.trim();
   if (customSystemPrompt) {
@@ -385,7 +384,6 @@ async function requestAIResponse(isRegenerate = false) {
           const chunk = parsed.choices?.[0]?.delta?.content || '';
           if (chunk) {
             fullRes += chunk;
-            // Ketikan teks AI muncul langsung saat sedang mikir / streaming
             updateAiTypingContent(aiBubble, fullRes);
             chatBox.scrollTop = chatBox.scrollHeight;
           }
@@ -393,7 +391,6 @@ async function requestAIResponse(isRegenerate = false) {
       }
     }
 
-    // Selesai streaming: Hilangkan video animasi loader
     finalizeAiBubble(aiBubble, fullRes);
 
     if (isRegenerate) {
@@ -421,14 +418,13 @@ async function requestAIResponse(isRegenerate = false) {
   }
 }
 
-// Stop Generating Handler
 stopBtn.addEventListener('click', () => {
   if (currentAbortController) {
     currentAbortController.abort();
   }
 });
 
-// Render Bubble UI & Animasi Loading Video
+// Render Tampilan Bubble Chat
 function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   const el = document.createElement('div');
   el.className = 'flex flex-col items-end gap-1';
@@ -482,7 +478,7 @@ function finalizeAiBubble(bubbleEl, text) {
   }
 }
 
-// Fitur Edit Pesan User
+// Edit & Regenerate Logika
 function handleEditMessage(index) {
   const session = getCurrentSession();
   const targetMsg = session.messages[index];
@@ -492,13 +488,11 @@ function handleEditMessage(index) {
   userInput.value = rawText;
   userInput.focus();
 
-  // Potong riwayat percakapan sampai sebelum pesan ini
   session.messages = session.messages.slice(0, index);
   saveSessions();
   loadCurrentChat();
 }
 
-// Fitur Regenerate, Copy & Voice TTS
 function addBubbleActionButtons(bubbleEl, text, index) {
   const actions = document.createElement('div');
   actions.className = 'mt-3 pt-2 border-t border-black/20 flex gap-2 text-xs not-prose';
@@ -515,7 +509,6 @@ function addBubbleActionButtons(bubbleEl, text, index) {
 
   actions.querySelector('.regen-btn').addEventListener('click', async () => {
     const session = getCurrentSession();
-    // Hapus pesan AI terakhir
     session.messages.pop();
     saveSessions();
     loadCurrentChat();
@@ -535,7 +528,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- OPTIMASI FITUR VOICE CALL (TELEPONAN INTERAKTIF) ---
+// --- FITUR VOICE CALL TELEPON DUA ARAH (ANTI-AUDIO LOCK) ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -547,51 +540,77 @@ let isCalling = false;
 let callInterval = null;
 let callSeconds = 0;
 let callRecognition = null;
+let isAiSpeaking = false;
 
-if (SpeechRecognition) {
-  callRecognition = new SpeechRecognition();
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SR) {
+  callRecognition = new SR();
   callRecognition.lang = 'id-ID';
-  callRecognition.continuous = false;
-  callRecognition.interimResults = false;
+  callRecognition.continuous = true;
+  callRecognition.interimResults = true;
 
   callRecognition.onstart = () => {
-    if (!isCalling) return;
-    callStatus.textContent = 'Mendengarkan Anda...';
+    if (isCalling && !isAiSpeaking) {
+      callStatus.textContent = 'Mendengarkan Anda...';
+    }
   };
 
-  callRecognition.onresult = async (e) => {
-    if (!isCalling) return;
-    const userSpoke = e.results[0][0].transcript;
-    callLiveText.textContent = `Anda: "${userSpoke}"`;
-    callStatus.textContent = 'AI sedang berpikir...';
-    await sendVoiceToAI(userSpoke);
+  callRecognition.onresult = (e) => {
+    if (!isCalling || isAiSpeaking) return;
+
+    let interimTranscript = '';
+    let finalTranscript = '';
+
+    for (let i = e.resultIndex; i < e.results.length; ++i) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript;
+      } else {
+        interimTranscript += e.results[i][0].transcript;
+      }
+    }
+
+    const currentHeard = finalTranscript || interimTranscript;
+    if (currentHeard.trim()) {
+      callLiveText.textContent = `Anda: "${currentHeard}"`;
+    }
+
+    if (finalTranscript.trim()) {
+      try { callRecognition.stop(); } catch (_) {}
+      callStatus.textContent = 'AI sedang berpikir...';
+      sendVoiceToAI(finalTranscript.trim());
+    }
   };
 
   callRecognition.onerror = (e) => {
-    if (isCalling && e.error === 'no-speech') {
-      try { callRecognition.start(); } catch (_) {}
+    console.warn('Call voice error:', e.error);
+    if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
+      setTimeout(() => {
+        try { callRecognition.start(); } catch (_) {}
+      }, 300);
+    }
+  };
+
+  callRecognition.onend = () => {
+    if (isCalling && !isAiSpeaking) {
+      setTimeout(() => {
+        try { callRecognition.start(); } catch (_) {}
+      }, 300);
     }
   };
 }
 
-callBtn.addEventListener('click', async () => {
+callBtn.addEventListener('click', () => {
   if (!callRecognition) {
-    alert('Browser Anda tidak mendukung Speech Recognition untuk telepon.');
+    alert('Browser tidak mendukung Speech Recognition untuk mode telepon.');
     return;
   }
-  try {
-    if (navigator.mediaDevices) {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-      s.getTracks().forEach(t => t.stop());
-    }
-    startCall();
-  } catch {
-    alert('Izin mic dibutuhkan untuk telepon.');
-  }
+  startCall();
 });
 
 function startCall() {
   isCalling = true;
+  isAiSpeaking = false;
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
@@ -603,13 +622,14 @@ function startCall() {
     callTimer.textContent = `${m}:${s}`;
   }, 1000);
 
-  speakCallResponse("Halo! Saya RZchat. Ada yang bisa saya bantu sekarang?");
+  speakCallResponse("Halo! Saya RZchat. Ada yang bisa saya bantu?");
 }
 
 hangupBtn.addEventListener('click', endCall);
 
 function endCall() {
   isCalling = false;
+  isAiSpeaking = false;
   clearInterval(callInterval);
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (callRecognition) {
@@ -620,7 +640,7 @@ function endCall() {
 
 async function sendVoiceToAI(text) {
   const session = getCurrentSession();
-  const callPrompt = `[MODE TELEPON AKTIF: Jawablah dengan sangat singkat, padat, santai layaknya orang teleponan tanpa bullet point, tanpa simbol markdown, dan tanpa emoji]: ${text}`;
+  const callPrompt = `[MODE TELEPON AKTIF: Jawablah sangat singkat, padat, santai maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
   
   session.messages.push({ role: 'user', content: callPrompt, displayHtml: escapeHtml(text) });
   saveSessions();
@@ -661,7 +681,7 @@ async function sendVoiceToAI(text) {
     speakCallResponse(fullRes);
 
   } catch (err) {
-    callLiveText.textContent = 'Gagal memproses respons.';
+    callLiveText.textContent = 'Koneksi terputus.';
     speakCallResponse("Maaf, suara kurang jelas. Bisa tolong ulangi?");
   }
 }
@@ -670,24 +690,32 @@ function speakCallResponse(text) {
   if (!('speechSynthesis' in window) || !isCalling) return;
 
   window.speechSynthesis.cancel();
+  isAiSpeaking = true;
   callStatus.textContent = 'AI sedang berbicara...';
+
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
 
   const utter = new SpeechSynthesisUtterance(clean);
   utter.lang = 'id-ID';
-  utter.rate = parseFloat(speechRateRange.value) || 1.05;
+  utter.rate = parseFloat(speechRateRange?.value) || 1.05;
 
-  utter.onend = () => {
+  const resumeListening = () => {
     if (!isCalling) return;
+    isAiSpeaking = false;
     callStatus.textContent = 'Mendengarkan Anda...';
-    try { callRecognition.start(); } catch (_) {}
+    try {
+      callRecognition.start();
+    } catch (_) {}
   };
+
+  utter.onend = resumeListening;
+  utter.onerror = resumeListening;
 
   window.speechSynthesis.speak(utter);
 }
 
-// Ekspor Chat Sesi
+// Ekspor Obrolan Sesi
 exportTxtBtn.addEventListener('click', () => {
   const session = getCurrentSession();
   let content = `=== RIWAYAT OBROLAN RZCHAT ===\nJudul: ${session.title}\n\n`;
@@ -715,7 +743,7 @@ function escapeHtml(str) {
   return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Drawer & Modal Event Listeners
+// Navigasi Drawer & Modal
 menuBtn.addEventListener('click', () => sidebarDrawer.classList.remove('hidden'));
 closeDrawerBtn.addEventListener('click', () => sidebarDrawer.classList.add('hidden'));
 sidebarDrawer.addEventListener('click', (e) => {
@@ -742,6 +770,6 @@ clearAllSessionsBtn.addEventListener('click', () => {
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 
-// Mulai aplikasi
+// Inisialisasi awal saat web dimuat
 renderSessionList();
 loadCurrentChat();
