@@ -2,18 +2,23 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Workspace</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+  <title>RZchat</title>
+  
+  <!-- PWA Setup -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- Ekstraktor PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <!-- Ekstraktor Teks Gambar (OCR) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
-    body { background-color: #ffffff; color: #000000; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #ffffff; color: #000000; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .prose p { margin-bottom: 0.65rem; }
     .prose p:last-child { margin-bottom: 0; }
     .prose pre { background: #f4f4f5; border: 1px solid #000000; border-radius: 4px; padding: 0.75rem; margin: 0.75rem 0; overflow-x: auto; }
@@ -24,49 +29,52 @@
     .recording-active { animation: recording 1s infinite; background-color: #000000 !important; color: #ffffff !important; }
   </style>
 </head>
-<body class="flex flex-col h-screen max-w-4xl mx-auto border-x border-black">
+<body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-black overflow-hidden">
 
   <!-- Header -->
   <header class="h-14 border-b border-black flex items-center justify-between px-4 bg-white select-none shrink-0">
     <div class="flex items-center gap-2">
       <div class="w-3 h-3 bg-black"></div>
-      <h1 class="font-bold text-sm tracking-wider uppercase">Qwen AI Workspace</h1>
+      <h1 class="font-bold text-sm tracking-wider uppercase">RZchat</h1>
     </div>
-    <button id="clear-btn" type="button" class="text-xs uppercase font-bold border border-black px-2.5 py-1 hover:bg-black hover:text-white transition">
-      Reset Chat
-    </button>
+    <div class="flex items-center gap-2">
+      <button id="settings-btn" type="button" class="text-xs uppercase font-bold border border-black px-2.5 py-1 hover:bg-black hover:text-white transition">
+        Setting
+      </button>
+      <button id="clear-btn" type="button" class="text-xs uppercase font-bold border border-black px-2.5 py-1 hover:bg-black hover:text-white transition">
+        Reset
+      </button>
+    </div>
   </header>
 
   <!-- Area Pesan -->
   <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
     <div id="empty-state" class="text-center py-16">
-      <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">Siap Digunakan</p>
-      <p class="text-xs text-neutral-500 mt-1">Ketik pesan, rekam suara via mic, atau upload file PDF / gambar.</p>
+      <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Siap</p>
+      <p class="text-xs text-neutral-500 mt-1">Riwayat chat tersimpan otomatis di perangkat.</p>
     </div>
   </div>
 
-  <!-- Indikator Loading File OCR / PDF -->
-  <div id="file-processing-bar" class="hidden px-4 py-2 border-t border-black bg-neutral-100 text-xs font-mono flex items-center justify-between">
+  <!-- Loading Bar OCR / File -->
+  <div id="file-processing-bar" class="hidden px-4 py-2 border-t border-black bg-neutral-100 text-xs font-mono flex items-center justify-between shrink-0">
     <span id="processing-status">Mengekstrak teks...</span>
     <span class="animate-pulse">Loading...</span>
   </div>
 
   <!-- Chip File Terlampir -->
-  <div id="attachment-chip" class="hidden px-4 py-2 border-t border-black bg-neutral-50 text-xs flex items-center justify-between">
+  <div id="attachment-chip" class="hidden px-4 py-2 border-t border-black bg-neutral-50 text-xs flex items-center justify-between shrink-0">
     <div class="flex items-center gap-2 overflow-hidden">
       <span class="font-bold uppercase">[File Terlampir]</span>
-      <span id="attachment-name" class="font-mono truncate max-w-xs md:max-w-md"></span>
+      <span id="attachment-name" class="font-mono truncate max-w-xs"></span>
     </div>
-    <button id="remove-attachment-btn" type="button" class="text-xs font-bold uppercase underline hover:text-neutral-600">
-      Hapus
-    </button>
+    <button id="remove-attachment-btn" type="button" class="text-xs font-bold uppercase underline">Hapus</button>
   </div>
 
-  <!-- Footer Input -->
-  <footer class="p-3 border-t border-black bg-white shrink-0">
+  <!-- Input Footer -->
+  <footer id="input-footer" class="p-3 border-t border-black bg-white shrink-0">
     <form id="chat-form" class="flex items-end gap-2">
       
-      <!-- Upload File / Gambar -->
+      <!-- Upload File -->
       <label class="p-2 border border-black cursor-pointer hover:bg-neutral-100 transition shrink-0" title="Lampirkan File / Foto">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
@@ -81,15 +89,15 @@
         </svg>
       </button>
 
-      <!-- Input Text -->
+      <!-- Textarea -->
       <textarea
         id="user-input"
         rows="1"
         placeholder="Ketik pesan..."
-        class="flex-1 border border-black p-2 text-sm resize-none focus:outline-none max-h-36 overflow-y-auto"
+        class="flex-1 border border-black p-2 text-sm resize-none focus:outline-none max-h-28 overflow-y-auto leading-normal"
       ></textarea>
 
-      <!-- Tombol Kirim -->
+      <!-- Kirim -->
       <button
         type="submit"
         id="send-btn"
@@ -99,6 +107,39 @@
       </button>
     </form>
   </footer>
+
+  <!-- Modal Settings -->
+  <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-black max-w-md w-full p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <div class="flex justify-between items-center border-b border-black pb-2">
+        <h2 class="font-bold text-sm tracking-wider uppercase">Tentang RZchat</h2>
+        <button id="close-settings-btn" class="font-bold text-sm px-2 py-0.5 border border-black hover:bg-black hover:text-white">✕</button>
+      </div>
+
+      <div class="text-xs space-y-3">
+        <div>
+          <span class="font-bold block text-neutral-800 uppercase">Versi & Mesin</span>
+          <p class="text-neutral-600">RZchat v1.2 (PWA Ready)</p>
+          <p class="text-neutral-600">Engine: Qwen 3.8 Max (OpenAI-compatible)</p>
+        </div>
+
+        <div>
+          <span class="font-bold block text-neutral-800 uppercase">Fitur Aplikasi</span>
+          <ul class="list-disc ml-4 text-neutral-600 space-y-0.5">
+            <li>Voice-to-text otomatis via browser</li>
+            <li>Ekstraksi teks dokumen PDF & TXT</li>
+            <li>OCR gambar bertenaga Tesseract dengan grayscale preprocessing</li>
+            <li>Penyimpanan percakapan lokal (Local Storage)</li>
+          </ul>
+        </div>
+
+        <div class="pt-2 border-t border-neutral-200 flex justify-between items-center">
+          <span class="font-bold text-neutral-800 uppercase">Penyimpanan Riwayat</span>
+          <button id="wipe-storage-btn" class="text-red-600 font-bold hover:underline">Hapus Semua Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
