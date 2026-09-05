@@ -24,6 +24,7 @@
     .prose code { font-family: monospace; font-size: 0.85rem; }
     @keyframes recording { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .recording-active { animation: recording 1s infinite; background-color: #000000 !important; color: #ffffff !important; }
+    .loader-video { width: 32px; height: 32px; object-fit: cover; border-radius: 50%; border: 1px solid #000; }
   </style>
 </head>
 <body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-black overflow-hidden relative">
@@ -35,7 +36,7 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       
-      <!-- Model Switcher Dropdown -->
+      <!-- Model Switcher -->
       <select id="model-select" class="border border-black text-xs p-1 font-bold bg-white focus:outline-none max-w-[130px] sm:max-w-none truncate">
         <option value="qwen/qwen3.8-max:free">Qwen 3.8 Max (Default)</option>
         <option value="sensenova/sensenova-6.8-flash-lite">SenseNova 6.8 Flash Lite</option>
@@ -45,6 +46,10 @@
     </div>
     
     <div class="flex items-center gap-1.5 sm:gap-2">
+      <!-- Tombol Voice Call (Telepon) -->
+      <button id="call-btn" type="button" class="p-1.5 border border-black hover:bg-black hover:text-white transition" title="Telepon AI">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+      </button>
       <button id="install-btn" class="hidden text-xs uppercase font-bold border border-black px-2 py-1 bg-black text-white">
         + Install
       </button>
@@ -75,7 +80,7 @@
   <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
     <div id="empty-state" class="text-center py-20">
       <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-      <p class="text-xs text-neutral-500 mt-1">Mendukung Multimodal Vision (Foto/Objek), PDF, & VN.</p>
+      <p class="text-xs text-neutral-500 mt-1">Mendukung Telepon AI, Edit/Regenerate, Stop Generating, Multimodal & VN.</p>
     </div>
   </div>
 
@@ -93,6 +98,14 @@
       <span id="attachment-name" class="font-mono truncate max-w-[200px]"></span>
     </div>
     <button id="remove-attachment-btn" type="button" class="text-xs font-bold uppercase underline">Batal</button>
+  </div>
+
+  <!-- Stop Generating Floating Bar -->
+  <div id="stop-container" class="hidden pb-2 px-3 flex justify-center bg-white">
+    <button id="stop-btn" type="button" class="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white text-xs font-bold uppercase tracking-wider shadow hover:bg-red-700 transition">
+      <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg>
+      Berhenti Mengetik
+    </button>
   </div>
 
   <!-- Footer Input -->
@@ -115,23 +128,75 @@
     </form>
   </footer>
 
-  <!-- Modal Settings -->
+  <!-- Modal Settings Lengkap -->
   <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white border-2 border-black max-w-md w-full p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+    <div class="bg-white border-2 border-black max-w-md w-full p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-[90dvh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-black pb-2">
-        <h2 class="font-bold text-sm tracking-wider uppercase">Pengaturan RZchat</h2>
+        <h2 class="font-bold text-sm tracking-wider uppercase">Pengaturan & Info RZchat</h2>
         <button id="close-settings-btn" class="font-bold text-sm px-2 py-0.5 border border-black">✕</button>
       </div>
-      <div class="text-xs space-y-2 text-neutral-600">
-        <p><b class="text-black uppercase">Model Terpasang:</b></p>
-        <ul class="list-disc ml-4 space-y-0.5">
-          <li>qwen/qwen3.8-max:free</li>
-          <li>sensenova/sensenova-6.8-flash-lite</li>
-          <li>deepseek/deepseek-v4-pro</li>
-          <li>minimax/minimax-m2.7-highspeed:free</li>
-        </ul>
-        <p class="pt-2 text-neutral-500">Semua model mendukung chat konteks, analisis visual gambar/foto, dokumen PDF, dan transkripsi suara.</p>
+
+      <!-- System Persona -->
+      <div class="space-y-1">
+        <label class="font-bold text-xs uppercase block text-neutral-800">Persona / Instruksi Sistem</label>
+        <textarea id="system-prompt-input" rows="2" placeholder="Contoh: Anda adalah asisten coding ahli yang ringkas dan profesional..." class="w-full border border-black p-2 text-xs focus:outline-none"></textarea>
       </div>
+
+      <!-- Pengaturan Suara -->
+      <div class="space-y-2 pt-2 border-t border-neutral-200">
+        <label class="font-bold text-xs uppercase block text-neutral-800">Pengaturan Suara Bicara</label>
+        <div class="flex items-center justify-between text-xs">
+          <span>Kecepatan Bicara (Speed):</span>
+          <input type="range" id="speech-rate-range" min="0.8" max="1.5" step="0.1" value="1.0" class="w-32">
+        </div>
+      </div>
+
+      <!-- Ekspor Chat -->
+      <div class="pt-2 border-t border-neutral-200">
+        <label class="font-bold text-xs uppercase block text-neutral-800 mb-1">Ekspor Obrolan Sesi Ini</label>
+        <div class="flex gap-2">
+          <button id="export-txt-btn" class="px-2 py-1 border border-black text-xs font-semibold hover:bg-neutral-100">Simpan TXT</button>
+          <button id="export-json-btn" class="px-2 py-1 border border-black text-xs font-semibold hover:bg-neutral-100">Simpan JSON</button>
+        </div>
+      </div>
+
+      <!-- Info Model & Sistem -->
+      <div class="text-xs space-y-2 text-neutral-600 pt-2 border-t border-neutral-200">
+        <p><b class="text-black uppercase">Versi:</b> RZchat 2.5 (PWA Vision & Voice)</p>
+        <p><b class="text-black uppercase">Engine Model:</b> Multi-Model (Qwen, SenseNova, DeepSeek, MiniMax)</p>
+        <p><b class="text-black uppercase">Tips Izin Mic Android:</b> Jika mic tidak berfungsi, klik ikon setelan di samping link browser > Izin > Ubah Mikrofon menjadi Izinkan.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Voice Call Overlay (Teleponan AI) -->
+  <div id="call-overlay" class="fixed inset-0 bg-white z-50 flex flex-col justify-between items-center p-8 hidden select-none">
+    <div class="text-center space-y-3 mt-6">
+      <div class="w-24 h-24 mx-auto border-2 border-black rounded-full p-2 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+        <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-full h-full object-contain" alt="RZ">
+      </div>
+      <div>
+        <h3 class="font-bold text-lg uppercase tracking-wider">RZchat Telepon</h3>
+        <p id="call-status" class="text-xs font-mono text-neutral-500 uppercase">Menghubungkan panggilan...</p>
+        <p id="call-timer" class="text-sm font-mono font-bold mt-1">00:00</p>
+      </div>
+    </div>
+
+    <!-- Animasi Video Call -->
+    <div class="flex flex-col items-center gap-3">
+      <video src="https://videotourl.com/videos/1788627788425-bbdd651d-20d3-4a0a-bd63-a27d0ca809cb.mp4" autoplay loop muted playsinline class="w-28 h-28 object-cover rounded-full border-2 border-black"></video>
+      <p id="call-live-text" class="text-xs text-center text-neutral-700 max-w-xs line-clamp-3 italic px-4">
+        "Katakan sesuatu untuk memulai obrolan..."
+      </p>
+    </div>
+
+    <!-- Tombol Tutup Telepon -->
+    <div class="mb-6">
+      <button id="hangup-btn" class="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg hover:bg-red-700 active:scale-95 transition" title="Tutup Panggilan">
+        <svg class="w-8 h-8 rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 4V3z"/>
+        </svg>
+      </button>
     </div>
   </div>
 
