@@ -6,6 +6,7 @@
   <title>RZchat</title>
   
   <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png">
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,7 +16,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     body { background-color: #ffffff; color: #000000; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .prose p { margin-bottom: 0.65rem; }
@@ -28,19 +28,25 @@
 </head>
 <body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-black overflow-hidden relative">
 
-  <!-- Topbar Header -->
+  <!-- Header -->
   <header class="h-14 border-b border-black flex items-center justify-between px-3 bg-white select-none shrink-0 z-10">
     <div class="flex items-center gap-2">
-      <!-- Tombol Buka Drawer Riwayat Chat -->
       <button id="menu-btn" class="p-1.5 border border-black hover:bg-neutral-100" title="Riwayat Chat">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
-      <h1 class="font-bold text-sm tracking-wider uppercase">RZchat</h1>
+      
+      <!-- Model Switcher Dropdown -->
+      <select id="model-select" class="border border-black text-xs p-1 font-bold bg-white focus:outline-none max-w-[130px] sm:max-w-none truncate">
+        <option value="qwen/qwen3.8-max:free">Qwen 3.8 Max (Default)</option>
+        <option value="sensenova/sensenova-6.8-flash-lite">SenseNova 6.8 Flash Lite</option>
+        <option value="deepseek/deepseek-v4-pro">DeepSeek V4 Pro</option>
+        <option value="minimax/minimax-m2.7-highspeed:free">MiniMax M2.7 HighSpeed</option>
+      </select>
     </div>
     
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1.5 sm:gap-2">
       <button id="install-btn" class="hidden text-xs uppercase font-bold border border-black px-2 py-1 bg-black text-white">
-        + Install App
+        + Install
       </button>
       <button id="new-chat-btn" class="text-xs uppercase font-bold border border-black px-2 py-1 hover:bg-neutral-100">
         + Baru
@@ -58,9 +64,7 @@
         <span class="font-bold text-sm uppercase">Riwayat Sesi Chat</span>
         <button id="close-drawer-btn" class="font-bold text-sm p-1">✕</button>
       </div>
-      <div id="session-list" class="flex-1 overflow-y-auto space-y-2 text-xs">
-        <!-- Daftar sesi percakapan dari LocalStorage -->
-      </div>
+      <div id="session-list" class="flex-1 overflow-y-auto space-y-2 text-xs"></div>
       <button id="clear-all-sessions-btn" class="w-full text-xs py-2 border border-red-600 text-red-600 uppercase font-bold hover:bg-red-600 hover:text-white transition">
         Kosongkan Riwayat
       </button>
@@ -71,13 +75,13 @@
   <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
     <div id="empty-state" class="text-center py-20">
       <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-      <p class="text-xs text-neutral-500 mt-1">Ketik pertanyaan, rekam VN, atau lampirkan foto/PDF.</p>
+      <p class="text-xs text-neutral-500 mt-1">Mendukung Multimodal Vision (Foto/Objek), PDF, & VN.</p>
     </div>
   </div>
 
-  <!-- Loading Bar OCR / File -->
+  <!-- Loading Bar Attachment -->
   <div id="file-processing-bar" class="hidden px-4 py-2 border-t border-black bg-neutral-100 text-xs font-mono flex items-center justify-between shrink-0">
-    <span id="processing-status">Mengekstrak gambar...</span>
+    <span id="processing-status">Memproses berkas...</span>
     <span class="animate-pulse">Loading...</span>
   </div>
 
@@ -91,7 +95,7 @@
     <button id="remove-attachment-btn" type="button" class="text-xs font-bold uppercase underline">Batal</button>
   </div>
 
-  <!-- Footer Input Area -->
+  <!-- Footer Input -->
   <footer class="p-3 border-t border-black bg-white shrink-0">
     <form id="chat-form" class="flex items-end gap-2">
       <label class="p-2 border border-black cursor-pointer hover:bg-neutral-100 transition shrink-0" title="Lampirkan File / Foto">
@@ -115,12 +119,18 @@
   <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white border-2 border-black max-w-md w-full p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
       <div class="flex justify-between items-center border-b border-black pb-2">
-        <h2 class="font-bold text-sm tracking-wider uppercase">Tentang RZchat</h2>
+        <h2 class="font-bold text-sm tracking-wider uppercase">Pengaturan RZchat</h2>
         <button id="close-settings-btn" class="font-bold text-sm px-2 py-0.5 border border-black">✕</button>
       </div>
       <div class="text-xs space-y-2 text-neutral-600">
-        <p><b class="text-black uppercase">Versi:</b> RZchat 2.0 (PWA Native)</p>
-        <p><b class="text-black uppercase">Fitur:</b> Voice Note, OCR Image preview, Multi-session local storage, Text-to-Speech (TTS).</p>
+        <p><b class="text-black uppercase">Model Terpasang:</b></p>
+        <ul class="list-disc ml-4 space-y-0.5">
+          <li>qwen/qwen3.8-max:free</li>
+          <li>sensenova/sensenova-6.8-flash-lite</li>
+          <li>deepseek/deepseek-v4-pro</li>
+          <li>minimax/minimax-m2.7-highspeed:free</li>
+        </ul>
+        <p class="pt-2 text-neutral-500">Semua model mendukung chat konteks, analisis visual gambar/foto, dokumen PDF, dan transkripsi suara.</p>
       </div>
     </div>
   </div>
