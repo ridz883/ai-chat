@@ -26,18 +26,8 @@
     .recording-active { animation: recording 1s infinite; background-color: #000000 !important; color: #ffffff !important; }
     .loader-video { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; border: 1px solid #000000; }
     
-    /* Animasi Waveform Native Ringan (Bebas Konflik Mic) */
-    @keyframes waveBar {
-      0%, 100% { height: 6px; }
-      50% { height: 36px; }
-    }
-    .wave-bar {
-      width: 4px;
-      background-color: #000000;
-      border-radius: 2px;
-      height: 6px;
-      transition: height 0.15s ease;
-    }
+    @keyframes waveBar { 0%, 100% { height: 6px; } 50% { height: 36px; } }
+    .wave-bar { width: 4px; background-color: #000000; border-radius: 2px; height: 6px; transition: height 0.15s ease; }
     .wave-active .wave-bar:nth-child(1) { animation: waveBar 0.8s infinite 0.1s; }
     .wave-active .wave-bar:nth-child(2) { animation: waveBar 0.7s infinite 0.2s; }
     .wave-active .wave-bar:nth-child(3) { animation: waveBar 0.9s infinite 0.15s; }
@@ -57,12 +47,16 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       
-      <!-- Model Switcher -->
-      <select id="model-select" class="border border-neutral-300 text-xs p-1.5 font-bold bg-white focus:outline-none rounded max-w-[130px] sm:max-w-none truncate">
+      <!-- Model Switcher Lengkap Dengan 4 Model Baru -->
+      <select id="model-select" class="border border-neutral-300 text-xs p-1.5 font-bold bg-white focus:outline-none rounded max-w-[125px] sm:max-w-none truncate">
         <option value="qwen/qwen3.8-max:free">Qwen 3.8 Max (Default)</option>
         <option value="sensenova/sensenova-6.8-flash-lite">SenseNova 6.8 Flash Lite</option>
         <option value="deepseek/deepseek-v4-pro">DeepSeek V4 Pro</option>
         <option value="minimax/minimax-m2.7-highspeed:free">MiniMax M2.7 HighSpeed</option>
+        <option value="minimax/minimax-m3:free">MiniMax M3 (Free)</option>
+        <option value="mistralai/mistral-small-2603">Mistral Small 2603</option>
+        <option value="mistralai/mistral-medium-3.5">Mistral Medium 3.5</option>
+        <option value="mistralai/mistral-large-2512">Mistral Large 2512</option>
       </select>
     </div>
     
@@ -70,9 +64,12 @@
       <button id="call-btn" type="button" class="p-2 border border-neutral-300 hover:bg-black hover:text-white transition rounded" title="Telepon AI">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
       </button>
-      <button id="install-btn" class="hidden text-xs uppercase font-bold border border-black px-2 py-1.5 bg-black text-white rounded">
-        + Install
+
+      <!-- Tombol Menu Debat Baru di Samping Menu Baru -->
+      <button id="debat-btn" class="text-xs uppercase font-bold border border-black px-2.5 py-1.5 bg-black text-white rounded hover:bg-neutral-800 transition">
+        Debat ⚔️
       </button>
+
       <button id="new-chat-btn" class="text-xs uppercase font-bold border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-100 rounded transition">
         + Baru
       </button>
@@ -97,12 +94,12 @@
     </aside>
   </div>
 
-  <!-- Area Pesan -->
+  <!-- Area Pesan Normal -->
   <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative select-text">
     <div id="empty-state" class="text-center py-24 select-none">
       <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-12 h-12 mx-auto mb-3 object-contain" alt="RZchat Logo">
       <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-      <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Voice Call · Vision Multimodal · Live Canvas</p>
+      <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Forum Debat Grup AI · Vision Multimodal · Live Canvas</p>
     </div>
   </div>
 
@@ -144,11 +141,9 @@
   <!-- Input Form Footer -->
   <footer class="p-3 border-t border-neutral-200 bg-white shrink-0">
     <form id="chat-form" class="flex items-end gap-1.5 sm:gap-2">
-      <!-- Input File Dokumen / Media Universal: Memaksa Android memanggil DocumentsUI (File Manager Terbaru) -->
       <input type="file" id="input-universal" accept="*/*" class="hidden">
       <input type="file" id="input-camera" accept="image/*" capture="environment" class="hidden">
 
-      <!-- Tombol Pilih Berkas / Galeri (DocumentsUI) -->
       <button type="button" id="btn-gallery" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Buka File & Foto (Documents)">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -157,7 +152,6 @@
         </svg>
       </button>
 
-      <!-- Tombol Kamera Langsung -->
       <button type="button" id="btn-camera" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Ambil Foto Kamera">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
@@ -165,20 +159,57 @@
         </svg>
       </button>
 
-      <!-- Mic (Speech to Text) -->
       <button type="button" id="mic-btn" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Voice Input">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
       </button>
 
-      <!-- Textarea Pesan -->
       <textarea id="user-input" rows="1" placeholder="Ketik pesan..." class="flex-1 border border-neutral-300 p-2 text-sm rounded resize-none focus:outline-none focus:border-black max-h-28 overflow-y-auto leading-normal select-text"></textarea>
 
-      <!-- Tombol Kirim -->
       <button type="submit" id="send-btn" class="px-4 py-2 bg-black text-white text-xs font-bold uppercase rounded hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0">
         Kirim
       </button>
     </form>
   </footer>
+
+  <!-- MODAL FORUM DEBAT MULTI-AGENT (ALA GRUP WHATSAPP) -->
+  <div id="debat-modal" class="hidden fixed inset-0 bg-neutral-900/60 z-50 flex flex-col justify-end md:justify-center items-center p-0 md:p-4">
+    <div class="bg-neutral-50 border-t-2 md:border-2 border-black w-full max-w-2xl h-[92dvh] md:h-[85dvh] flex flex-col rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden">
+      <!-- Header Ruang Debat -->
+      <div class="h-14 border-b border-neutral-300 bg-white flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">⚔️</div>
+          <div>
+            <h3 class="font-bold text-xs uppercase tracking-wide">Forum Debat AI (Multi-Agent)</h3>
+            <p id="debat-status-header" class="text-[10px] text-neutral-500 font-mono">Qwen · DeepSeek · Mistral · MiniMax</p>
+          </div>
+        </div>
+        <button id="close-debat-btn" class="text-xs font-bold px-2.5 py-1 border border-neutral-300 rounded hover:bg-neutral-100">✕ Tutup</button>
+      </div>
+
+      <!-- Ruang Obrolan Grup Debat -->
+      <div id="debat-chat-flow" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#e5ddd5]/30">
+        <div class="bg-white/90 border border-neutral-300 text-neutral-600 p-3 rounded-lg text-xs text-center max-w-sm mx-auto shadow-sm">
+          💡 <b>Cara Kerja Debat:</b> Masukkan topik pertanyaan. Keempat AI akan mengeluarkan argumen mandiri, saling menyanggah data yang keliru, lalu melakukan voting untuk menetapkan 1 jawaban yang paling benar dan mutlak.
+        </div>
+      </div>
+
+      <!-- Indikator Sedang Berdebat -->
+      <div id="debat-typing-bar" class="hidden px-4 py-2 border-t border-neutral-200 bg-white text-xs font-mono flex items-center gap-2 shrink-0">
+        <video src="https://videotourl.com/videos/1788670557376-a9c3e8e5-7da0-4f74-abfe-6e415b0f227d.mp4" autoplay loop muted playsinline class="w-4 h-4 rounded-full"></video>
+        <span id="debat-typing-text" class="text-neutral-600 animate-pulse">Model AI sedang merumuskan argumen...</span>
+      </div>
+
+      <!-- Input Topik Debat -->
+      <div class="p-3 border-t border-neutral-300 bg-white shrink-0">
+        <form id="debat-form" class="flex gap-2">
+          <input type="text" id="debat-input" placeholder="Ajukan pertanyaan/topik debat (Contoh: Siapa presiden pertama Indonesia?)..." class="flex-1 border border-neutral-300 p-2 text-xs rounded focus:outline-none focus:border-black">
+          <button type="submit" id="start-debat-btn" class="px-4 py-2 bg-black text-white text-xs font-bold uppercase rounded hover:bg-neutral-800 disabled:opacity-50 transition">
+            Mulai Debat
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Undo Hapus Sesi -->
   <div id="undo-toast" class="hidden fixed bottom-16 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-2 text-xs flex items-center gap-3 rounded-md shadow-lg border border-neutral-700">
@@ -251,7 +282,6 @@
   <!-- Fullscreen Voice Call Overlay -->
   <div id="call-overlay" class="fixed inset-0 bg-white z-50 flex flex-col justify-between items-center p-8 hidden select-none">
     <div class="text-center space-y-2 mt-6">
-      <!-- Logo RZchat Asli -->
       <div class="w-20 h-20 mx-auto rounded-full border border-neutral-200 p-2 flex items-center justify-center bg-white shadow-sm">
         <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-full h-full object-contain" alt="RZchat Logo">
       </div>
@@ -262,11 +292,8 @@
       </div>
     </div>
 
-    <!-- Video Loader & CSS Animated Waveform (Bebas Konflik Audio Mic) -->
     <div class="flex flex-col items-center gap-4 w-full max-w-xs">
       <video id="call-loading-video" src="https://videotourl.com/videos/1788670557376-a9c3e8e5-7da0-4f74-abfe-6e415b0f227d.mp4" autoplay loop muted playsinline class="w-20 h-20 object-cover rounded-full border border-neutral-200 shadow-sm"></video>
-      
-      <!-- Waveform Bars Container -->
       <div id="waveform-container" class="flex items-center justify-center gap-1.5 h-10 w-full border-b border-neutral-200 pb-2">
         <div class="wave-bar"></div>
         <div class="wave-bar"></div>
@@ -277,13 +304,11 @@
         <div class="wave-bar"></div>
         <div class="wave-bar"></div>
       </div>
-
       <p id="call-live-text" class="text-xs text-center text-neutral-600 max-w-xs line-clamp-3 italic px-2">
         "Bicaralah untuk mulai mengobrol..."
       </p>
     </div>
 
-    <!-- Tombol Tutup Panggilan -->
     <div class="mb-6">
       <button id="hangup-btn" class="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md hover:bg-red-700 active:scale-95 transition" title="Tutup Panggilan">
         <svg class="w-6 h-6 rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20">
