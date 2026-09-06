@@ -99,13 +99,11 @@ const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const micBtn = document.getElementById('mic-btn');
 
-// Poin 3 & 4: Tombol & Input File Terpisah
+// Input File Dokumen & Galeri Universal
 const btnGallery = document.getElementById('btn-gallery');
 const btnCamera = document.getElementById('btn-camera');
-const btnDoc = document.getElementById('btn-doc');
-const inputGallery = document.getElementById('input-gallery');
+const inputUniversal = document.getElementById('input-universal');
 const inputCamera = document.getElementById('input-camera');
-const inputDoc = document.getElementById('input-doc');
 
 const fileProcessingBar = document.getElementById('file-processing-bar');
 const processingStatus = document.getElementById('processing-status');
@@ -139,7 +137,7 @@ let undoTimeout = null;
 
 marked.setOptions({ breaks: true, gfm: true });
 
-// Mobile Viewport Fix
+// Mobile Viewport Keyboard Fix
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => {
     document.body.style.height = `${window.visualViewport.height}px`;
@@ -147,7 +145,7 @@ if (window.visualViewport) {
   });
 }
 
-// --- SMART SCROLL & FLOATING DOWN BUTTON ---
+// --- SMART AUTO-SCROLL & FLOATING DOWN BUTTON ---
 let userHasScrolledUp = false;
 
 chatBox.addEventListener('scroll', () => {
@@ -319,7 +317,7 @@ function loadCurrentChat() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- VOICE NOTES INPUT BIASA (CHAT) ---
+// --- VOICE NOTES INPUT CHAT (STT) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
@@ -356,10 +354,10 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- POIN 3 & 4: MEMILIH FOTO, KAMERA, DOKUMEN ---
+// --- FILE PICKER DOCUMENTS & CAMERA ---
 btnGallery.addEventListener('click', () => {
   triggerHaptic(15);
-  inputGallery.click();
+  inputUniversal.click();
 });
 
 btnCamera.addEventListener('click', () => {
@@ -367,12 +365,7 @@ btnCamera.addEventListener('click', () => {
   inputCamera.click();
 });
 
-btnDoc.addEventListener('click', () => {
-  triggerHaptic(15);
-  inputDoc.click();
-});
-
-[inputGallery, inputCamera].forEach(inp => {
+[inputUniversal, inputCamera].forEach(inp => {
   inp.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -381,59 +374,41 @@ btnDoc.addEventListener('click', () => {
     sendBtn.disabled = true;
 
     try {
-      processingStatus.textContent = 'Memuat gambar...';
-      const base64Data = await fileToBase64(file);
-      pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
-      thumbPreview.style.backgroundImage = `url(${base64Data})`;
-      thumbPreview.classList.remove('hidden');
+      if (file.type.startsWith('image/')) {
+        processingStatus.textContent = 'Memuat gambar...';
+        const base64Data = await fileToBase64(file);
+        pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
+        thumbPreview.style.backgroundImage = `url(${base64Data})`;
+        thumbPreview.classList.remove('hidden');
+      } else if (file.type === 'application/pdf') {
+        processingStatus.textContent = 'Mengekstrak PDF...';
+        const buf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const c = await page.getTextContent();
+          text += c.items.map(it => it.str).join(' ') + '\n';
+        }
+        pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
+        thumbPreview.classList.add('hidden');
+      } else {
+        processingStatus.textContent = 'Membaca berkas...';
+        const text = await file.text();
+        pendingAttachment = { type: 'text', name: file.name, extractedText: text };
+        thumbPreview.classList.add('hidden');
+      }
       attachmentName.textContent = file.name;
       attachmentChip.classList.remove('hidden');
       triggerHaptic(20);
     } catch (err) {
-      alert('Gagal memuat gambar: ' + err.message);
+      alert('Gagal membaca berkas: ' + err.message);
     } finally {
       fileProcessingBar.classList.add('hidden');
       inp.value = '';
       sendBtn.disabled = false;
     }
   });
-});
-
-inputDoc.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  fileProcessingBar.classList.remove('hidden');
-  sendBtn.disabled = true;
-
-  try {
-    if (file.type === 'application/pdf') {
-      processingStatus.textContent = 'Mengekstrak PDF...';
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const c = await page.getTextContent();
-        text += c.items.map(it => it.str).join(' ') + '\n';
-      }
-      pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
-    } else {
-      processingStatus.textContent = 'Membaca dokumen...';
-      const text = await file.text();
-      pendingAttachment = { type: 'text', name: file.name, extractedText: text };
-    }
-    thumbPreview.classList.add('hidden');
-    attachmentName.textContent = file.name;
-    attachmentChip.classList.remove('hidden');
-    triggerHaptic(20);
-  } catch (err) {
-    alert('Gagal membaca berkas: ' + err.message);
-  } finally {
-    fileProcessingBar.classList.add('hidden');
-    inputDoc.value = '';
-    sendBtn.disabled = false;
-  }
 });
 
 function fileToBase64(file) {
@@ -623,7 +598,7 @@ stopBtn.addEventListener('click', () => {
 // Dynamic Title Otomatis
 async function generateDynamicTitle(session) {
   try {
-    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum pertanyaan ini: " + (typeof session.messages[0].content === 'string' ? session.messages[0].content : 'Gambar');
+    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum pertanyaan ini: " + (typeof session.messages[0].content === 'string' ? session.messages[0].content : 'Lampiran');
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -668,7 +643,6 @@ function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   if (autoScroll) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Poin 4: Menggunakan Link Video Loading Baru
 function appendAiBubble(autoScroll = true, showLoader = false) {
   const el = document.createElement('div');
   el.className = 'flex justify-start';
@@ -825,63 +799,80 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- POIN 1: PERBAIKAN TOTAL CALL AI (SPEECH-TO-SPEECH BERURUTAN) ---
+// --- VOICE CALL DUA ARAH STABIL & BEBAS DEADLOCK ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
 const callStatus = document.getElementById('call-status');
 const callTimer = document.getElementById('call-timer');
 const callLiveText = document.getElementById('call-live-text');
-const waveformCanvas = document.getElementById('waveform-canvas');
-const canvasCtx = waveformCanvas.getContext('2d');
+const waveformContainer = document.getElementById('waveform-container');
 
 let isCalling = false;
 let callInterval = null;
 let callSeconds = 0;
 let callRecognition = null;
 let isAiSpeaking = false;
-
-let audioContext = null;
-let analyser = null;
-let micSourceNode = null;
-let micStream = null;
-let animFrameId = null;
+let silenceTimer = null;
+let speechUnlockTimeout = null;
+let accumulatedUserSpeech = '';
 
 const CallSR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (CallSR) {
   callRecognition = new CallSR();
   callRecognition.lang = 'id-ID';
-  callRecognition.continuous = false; // Mode giliran: dengarkan 1 kalimat penuh agar tidak timeout/stuck
+  callRecognition.continuous = true;
   callRecognition.interimResults = true;
 
   callRecognition.onstart = () => {
     if (isCalling && !isAiSpeaking) {
-      callStatus.textContent = 'Mendengarkan...';
+      callStatus.textContent = 'Mendengarkan Anda...';
+      waveformContainer.classList.add('wave-active');
     }
   };
 
   callRecognition.onresult = (e) => {
-    if (!isCalling || isAiSpeaking) return;
+    if (!isCalling) return;
+
+    // Audio Interrupt: Jika AI sedang bicara dan pengguna memotong omongan
+    if (isAiSpeaking) {
+      window.speechSynthesis.cancel();
+      isAiSpeaking = false;
+      callStatus.textContent = 'Mendengarkan Anda...';
+    }
 
     let interim = '';
     let final = '';
 
     for (let i = e.resultIndex; i < e.results.length; ++i) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        final += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
     }
 
     const currentSpoken = (final || interim).trim();
-    if (currentSpoken.length > 0) {
-      callLiveText.textContent = `Anda: "${currentSpoken}"`;
-    }
 
-    // Jika kata final sudah didapat, kirim ke AI
-    if (final.trim().length > 1) {
-      const recognizedText = final.trim();
-      callStatus.textContent = 'AI sedang berpikir...';
-      sendVoiceToAI(recognizedText);
+    if (currentSpoken.length > 1) {
+      callLiveText.textContent = `Anda: "${currentSpoken}"`;
+      accumulatedUserSpeech = currentSpoken;
+      waveformContainer.classList.add('wave-active');
+
+      // Debounce: deteksi hening 1.2 detik tanda selesai berbicara
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
+          const textToSend = accumulatedUserSpeech.trim();
+          accumulatedUserSpeech = '';
+
+          try { callRecognition.stop(); } catch (_) {}
+          waveformContainer.classList.remove('wave-active');
+          callStatus.textContent = 'AI sedang berpikir...';
+          sendVoiceToAI(textToSend);
+        }
+      }, 1200);
     }
   };
 
@@ -889,56 +880,36 @@ if (CallSR) {
     console.warn('Call SR error:', e.error);
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
       setTimeout(() => {
-        startListeningSafe();
+        try { callRecognition.start(); } catch (_) {}
       }, 400);
     }
   };
 
   callRecognition.onend = () => {
-    // Restart mendengarkan jika panggilan aktif dan AI tidak sedang bicara
     if (isCalling && !isAiSpeaking) {
       setTimeout(() => {
-        startListeningSafe();
-      }, 300);
+        try { callRecognition.start(); } catch (_) {}
+      }, 400);
     }
   };
 }
 
-function startListeningSafe() {
-  if (!isCalling || isAiSpeaking || !callRecognition) return;
-  try {
-    callRecognition.start();
-    callStatus.textContent = 'Mendengarkan...';
-  } catch (_) {}
-}
-
-callBtn.addEventListener('click', async () => {
+callBtn.addEventListener('click', () => {
   triggerHaptic(20);
   if (!callRecognition) {
-    alert('Browser Anda tidak mendukung Speech Recognition untuk telepon.');
+    alert('Browser tidak mendukung Speech Recognition untuk mode telepon.');
     return;
   }
   startCall();
 });
 
-async function startCall() {
+function startCall() {
   isCalling = true;
   isAiSpeaking = false;
+  accumulatedUserSpeech = '';
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
-
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 64;
-    micSourceNode = audioContext.createMediaStreamSource(micStream);
-    micSourceNode.connect(analyser);
-    drawLiveWaveform();
-  } catch (err) {
-    console.warn('Waveform AudioContext Gagal:', err);
-  }
 
   callInterval = setInterval(() => {
     callSeconds++;
@@ -950,47 +921,27 @@ async function startCall() {
   speakCallResponse("Halo! Saya RZchat. Ada yang bisa saya bantu?");
 }
 
-function drawLiveWaveform() {
-  if (!isCalling) return;
-
-  animFrameId = requestAnimationFrame(drawLiveWaveform);
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
-
-  canvasCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-  const barWidth = (waveformCanvas.width / bufferLength) * 1.5;
-  let x = 0;
-
-  for (let i = 0; i < bufferLength; i++) {
-    const barHeight = (dataArray[i] / 255) * waveformCanvas.height;
-    canvasCtx.fillStyle = '#000000';
-    canvasCtx.fillRect(x, waveformCanvas.height - barHeight, barWidth - 2, barHeight);
-    x += barWidth;
-  }
-}
-
 hangupBtn.addEventListener('click', endCall);
 
 function endCall() {
   triggerHaptic(20);
   isCalling = false;
   isAiSpeaking = false;
+  clearTimeout(silenceTimer);
+  clearTimeout(speechUnlockTimeout);
   clearInterval(callInterval);
-  cancelAnimationFrame(animFrameId);
 
-  if (micStream) micStream.getTracks().forEach(t => t.stop());
-  if (audioContext) audioContext.close();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (callRecognition) {
     try { callRecognition.stop(); } catch (_) {}
   }
+  waveformContainer.classList.remove('wave-active');
   callOverlay.classList.add('hidden');
 }
 
 async function sendVoiceToAI(text) {
   const session = getCurrentSession();
-  const callPrompt = `[MODE TELEPON AKTIF: Jawab langsung, sangat ringkas maksimal 2 kalimat santai tanpa markdown, bullet points, atau simbol]: ${text}`;
+  const callPrompt = `[MODE TELEPON AKTIF: Jawablah langsung, santai, ringkas maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
   
   session.messages.push({ role: 'user', content: callPrompt, displayHtml: escapeHtml(text) });
   saveSessions();
@@ -1032,8 +983,8 @@ async function sendVoiceToAI(text) {
     speakCallResponse(fullRes);
 
   } catch (err) {
-    callLiveText.textContent = 'Koneksi suara terganggu.';
-    speakCallResponse("Maaf, suara terputus. Bisa tolong ulangi?");
+    callLiveText.textContent = 'Koneksi suara terputus.';
+    speakCallResponse("Maaf, jaringan suara terputus. Bisa tolong ulangi?");
   }
 }
 
@@ -1043,6 +994,9 @@ function speakCallResponse(text) {
   window.speechSynthesis.cancel();
   isAiSpeaking = true;
   callStatus.textContent = 'AI sedang berbicara...';
+  waveformContainer.classList.add('wave-active');
+
+  try { callRecognition.stop(); } catch (_) {}
 
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
@@ -1053,14 +1007,23 @@ function speakCallResponse(text) {
 
   const resumeTurn = () => {
     if (!isCalling) return;
-    isAiSpeaking = false;
+    clearTimeout(speechUnlockTimeout);
     setTimeout(() => {
-      startListeningSafe();
-    }, 400);
+      isAiSpeaking = false;
+      accumulatedUserSpeech = '';
+      callStatus.textContent = 'Mendengarkan Anda...';
+      waveformContainer.classList.remove('wave-active');
+      try { callRecognition.start(); } catch (_) {}
+    }, 500);
   };
 
   utter.onend = resumeTurn;
   utter.onerror = resumeTurn;
+
+  // Fallback pengaman: cegah speech deadlock jika browser Android lupa menembakkan event onend
+  clearTimeout(speechUnlockTimeout);
+  const estimatedDuration = Math.max(3000, clean.split(' ').length * 450);
+  speechUnlockTimeout = setTimeout(resumeTurn, estimatedDuration);
 
   window.speechSynthesis.speak(utter);
 }
