@@ -1,5 +1,12 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// --- HAPTIC FEEDBACK (GETAR HALUS HP ANDROID) ---
+function triggerHaptic(duration = 15) {
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate(duration); } catch (_) {}
+  }
+}
+
 // --- PWA SERVICE WORKER REGISTRATION ---
 let deferredPrompt = null;
 const installBtn = document.getElementById('install-btn');
@@ -15,6 +22,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 installBtn.addEventListener('click', async () => {
+  triggerHaptic(20);
   if (deferredPrompt) {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
@@ -29,6 +37,7 @@ const ACTIVE_SESSION_KEY = 'rzchat_active_id';
 const MODEL_KEY = 'rzchat_selected_model';
 const SYSTEM_PROMPT_KEY = 'rzchat_system_prompt';
 const SPEECH_RATE_KEY = 'rzchat_speech_rate';
+const TEMPERATURE_KEY = 'rzchat_temperature';
 
 let sessions = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
 let currentSessionId = localStorage.getItem(ACTIVE_SESSION_KEY) || null;
@@ -45,6 +54,15 @@ const speechRateRange = document.getElementById('speech-rate-range');
 speechRateRange.value = localStorage.getItem(SPEECH_RATE_KEY) || '1.0';
 speechRateRange.addEventListener('change', () => localStorage.setItem(SPEECH_RATE_KEY, speechRateRange.value));
 
+const tempRange = document.getElementById('temp-range');
+const tempValDisplay = document.getElementById('temp-val-display');
+tempRange.value = localStorage.getItem(TEMPERATURE_KEY) || '0.7';
+tempValDisplay.textContent = tempRange.value;
+tempRange.addEventListener('input', () => {
+  tempValDisplay.textContent = tempRange.value;
+  localStorage.setItem(TEMPERATURE_KEY, tempRange.value);
+});
+
 if (!currentSessionId || !sessions.find(s => s.id === currentSessionId)) {
   initNewSession();
 }
@@ -54,6 +72,7 @@ function initNewSession() {
   const newSession = {
     id: newId,
     title: 'Obrolan Baru',
+    pinned: false,
     messages: [],
     updatedAt: Date.now()
   };
@@ -79,7 +98,6 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const micBtn = document.getElementById('mic-btn');
-const fileInput = document.getElementById('file-input');
 const fileProcessingBar = document.getElementById('file-processing-bar');
 const processingStatus = document.getElementById('processing-status');
 const attachmentChip = document.getElementById('attachment-chip');
@@ -98,9 +116,18 @@ const stopContainer = document.getElementById('stop-container');
 const stopBtn = document.getElementById('stop-btn');
 const exportTxtBtn = document.getElementById('export-txt-btn');
 const exportJsonBtn = document.getElementById('export-json-btn');
+const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+const scrollDot = document.getElementById('scroll-dot');
+const retryBar = document.getElementById('retry-bar');
+const retryBtn = document.getElementById('retry-btn');
+const undoToast = document.getElementById('undo-toast');
+const undoToastText = document.getElementById('undo-toast-text');
+const undoBtn = document.getElementById('undo-btn');
 
 let pendingAttachment = null;
 let currentAbortController = null;
+let deletedSessionBackup = null;
+let undoTimeout = null;
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -111,6 +138,31 @@ if (window.visualViewport) {
     chatBox.scrollTop = chatBox.scrollHeight;
   });
 }
+
+// --- SMART AUTO-SCROLL & FLOATING DOWN BUTTON ---
+let userHasScrolledUp = false;
+
+chatBox.addEventListener('scroll', () => {
+  const threshold = 100;
+  const isNearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= threshold;
+  
+  if (!isNearBottom) {
+    userHasScrolledUp = true;
+    scrollBottomBtn.classList.remove('hidden');
+  } else {
+    userHasScrolledUp = false;
+    scrollBottomBtn.classList.add('hidden');
+    scrollDot.classList.add('hidden');
+  }
+});
+
+scrollBottomBtn.addEventListener('click', () => {
+  triggerHaptic(15);
+  chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+  userHasScrolledUp = false;
+  scrollBottomBtn.classList.add('hidden');
+  scrollDot.classList.add('hidden');
+});
 
 userInput.addEventListener('input', () => {
   userInput.style.height = 'auto';
@@ -124,47 +176,129 @@ userInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Render Drawer Sessions
+// --- RENDER DRAWER SESSIONS (DENGAN PIN / SEMATKAN & UNDO DELETE) ---
 function renderSessionList() {
   sessionList.innerHTML = '';
-  sessions.forEach(s => {
+  // Urutkan: Pinned di paling atas, lalu sesuai tanggal update
+  const sortedSessions = [...sessions].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
+
+  sortedSessions.forEach(s => {
     const item = document.createElement('div');
-    item.className = `p-2 border border-black cursor-pointer flex justify-between items-center ${s.id === currentSessionId ? 'bg-black text-white' : 'hover:bg-neutral-100'}`;
+    item.className = `p-2 border border-black cursor-pointer flex justify-between items-center transition relative ${s.id === currentSessionId ? 'bg-black text-white' : 'hover:bg-neutral-100'}`;
     item.innerHTML = `
-      <span class="truncate flex-1 font-mono">${escapeHtml(s.title)}</span>
-      <button class="ml-2 font-bold px-1 hover:text-red-500 delete-session-btn" data-id="${s.id}">✕</button>
+      <div class="flex items-center gap-1.5 truncate flex-1">
+        ${s.pinned ? '<span class="text-xs">📌</span>' : ''}
+        <span class="truncate font-mono">${escapeHtml(s.title)}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="px-1 text-[11px] hover:text-amber-500 pin-session-btn" data-id="${s.id}" title="${s.pinned ? 'Lepas Pin' : 'Sematkan'}">${s.pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="font-bold px-1 hover:text-red-500 delete-session-btn" data-id="${s.id}">✕</button>
+      </div>
     `;
+
+    // Long press / click-hold untuk Pin di Mobile
+    let pressTimer;
+    item.addEventListener('touchstart', () => {
+      pressTimer = setTimeout(() => {
+        triggerHaptic(30);
+        togglePinSession(s.id);
+      }, 600);
+    });
+    item.addEventListener('touchend', () => clearTimeout(pressTimer));
+
     item.addEventListener('click', (e) => {
-      if (e.target.classList.contains('delete-session-btn')) return;
+      if (e.target.classList.contains('delete-session-btn') || e.target.classList.contains('pin-session-btn')) return;
+      triggerHaptic(10);
       currentSessionId = s.id;
       saveSessions();
       loadCurrentChat();
       sidebarDrawer.classList.add('hidden');
     });
+
     sessionList.appendChild(item);
   });
 
+  // Listener Pin
+  document.querySelectorAll('.pin-session-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      triggerHaptic(15);
+      togglePinSession(btn.getAttribute('data-id'));
+    });
+  });
+
+  // Listener Delete dengan Batas Balik / Undo 5 Detik
   document.querySelectorAll('.delete-session-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      triggerHaptic(20);
       const id = btn.getAttribute('data-id');
-      sessions = sessions.filter(s => s.id !== id);
+      const targetIndex = sessions.findIndex(s => s.id === id);
+      if (targetIndex === -1) return;
+
+      deletedSessionBackup = { session: sessions[targetIndex], index: targetIndex };
+      sessions.splice(targetIndex, 1);
+
       if (sessions.length === 0) initNewSession();
       else if (currentSessionId === id) currentSessionId = sessions[0].id;
+
       saveSessions();
       loadCurrentChat();
+
+      // Tampilkan toast undo
+      clearTimeout(undoTimeout);
+      undoToast.classList.remove('hidden');
+      undoTimeout = setTimeout(() => {
+        undoToast.classList.add('hidden');
+        deletedSessionBackup = null;
+      }, 5000);
     });
   });
+}
+
+function togglePinSession(id) {
+  const sess = sessions.find(s => s.id === id);
+  if (sess) {
+    sess.pinned = !sess.pinned;
+    saveSessions();
+  }
+}
+
+undoBtn.addEventListener('click', () => {
+  if (deletedSessionBackup) {
+    triggerHaptic(20);
+    sessions.splice(deletedSessionBackup.index, 0, deletedSessionBackup.session);
+    currentSessionId = deletedSessionBackup.session.id;
+    deletedSessionBackup = null;
+    clearTimeout(undoTimeout);
+    undoToast.classList.add('hidden');
+    saveSessions();
+    loadCurrentChat();
+  }
+});
+
+// --- KALKULATOR TOKEN & DURASI BACA ---
+function calculateReadingStats(text) {
+  const clean = text.replace(/[*#`_\[\]()]/g, '').trim();
+  const words = clean.length > 0 ? clean.split(/\s+/).length : 0;
+  const minutes = Math.max(1, Math.ceil(words / 200));
+  return `${words} kata · ~${minutes} menit baca`;
 }
 
 function loadCurrentChat() {
   const session = getCurrentSession();
   chatBox.innerHTML = '';
+  retryBar.classList.add('hidden');
+
   if (!session || session.messages.length === 0) {
     chatBox.innerHTML = `
-      <div id="empty-state" class="text-center py-20">
+      <div id="empty-state" class="text-center py-20 select-none">
         <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-        <p class="text-xs text-neutral-500 mt-1">Mendukung Telepon AI, Edit/Regenerate, Stop Generating, Multimodal & VN.</p>
+        <p class="text-xs text-neutral-500 mt-1">Mendukung Canvas Live Preview, Voice Call Waveform, Vision & Dokumen.</p>
       </div>`;
     return;
   }
@@ -195,6 +329,7 @@ if (SpeechRecognition) {
   recognition.onstart = () => {
     isRecording = true;
     micBtn.classList.add('recording-active');
+    triggerHaptic(20);
   };
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
@@ -204,6 +339,7 @@ if (SpeechRecognition) {
   recognition.onend = () => stopMic();
 
   micBtn.addEventListener('click', () => {
+    triggerHaptic(15);
     if (!isRecording) {
       try { recognition.start(); } catch { stopMic(); }
     } else {
@@ -217,24 +353,72 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- FILE UPLOAD (MULTIMODAL BASE64 & PDF) ---
-fileInput.addEventListener('change', async (e) => {
+// --- BOTTOM SHEET ATTACHMENT MENU ---
+const attachmentMenuBtn = document.getElementById('attachment-menu-btn');
+const bottomSheetOverlay = document.getElementById('bottom-sheet-overlay');
+const closeBottomSheet = document.getElementById('close-bottom-sheet');
+const fileInputGallery = document.getElementById('file-input-gallery');
+const fileInputCamera = document.getElementById('file-input-camera');
+const fileInputDocs = document.getElementById('file-input-docs');
+
+attachmentMenuBtn.addEventListener('click', () => {
+  triggerHaptic(15);
+  bottomSheetOverlay.classList.remove('hidden');
+});
+
+closeBottomSheet.addEventListener('click', () => bottomSheetOverlay.classList.add('hidden'));
+bottomSheetOverlay.addEventListener('click', (e) => {
+  if (e.target === bottomSheetOverlay) bottomSheetOverlay.classList.add('hidden');
+});
+
+document.getElementById('btn-opt-camera').addEventListener('click', () => {
+  bottomSheetOverlay.classList.add('hidden');
+  fileInputCamera.click();
+});
+
+document.getElementById('btn-opt-gallery').addEventListener('click', () => {
+  bottomSheetOverlay.classList.add('hidden');
+  fileInputGallery.click();
+});
+
+document.getElementById('btn-opt-doc').addEventListener('click', () => {
+  bottomSheetOverlay.classList.add('hidden');
+  fileInputDocs.click();
+});
+
+document.getElementById('btn-opt-genimg').addEventListener('click', () => {
+  bottomSheetOverlay.classList.add('hidden');
+  userInput.value = 'Buat gambar ilustrasi tentang: ';
+  userInput.focus();
+  triggerHaptic(15);
+});
+
+[fileInputGallery, fileInputCamera].forEach(inp => {
+  inp.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    processAttachmentFile(file, 'image');
+  });
+});
+
+fileInputDocs.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  processAttachmentFile(file, file.type === 'application/pdf' ? 'pdf' : 'text');
+});
 
+async function processAttachmentFile(file, type) {
   fileProcessingBar.classList.remove('hidden');
   sendBtn.disabled = true;
 
   try {
-    if (file.type.startsWith('image/')) {
+    if (type === 'image') {
       processingStatus.textContent = 'Memproses visual gambar...';
       const base64Data = await fileToBase64(file);
       pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
       thumbPreview.style.backgroundImage = `url(${base64Data})`;
       thumbPreview.classList.remove('hidden');
-      attachmentName.textContent = file.name;
-      attachmentChip.classList.remove('hidden');
-    } else if (file.type === 'application/pdf') {
+    } else if (type === 'pdf') {
       processingStatus.textContent = 'Mengekstrak PDF...';
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -246,23 +430,24 @@ fileInput.addEventListener('change', async (e) => {
       }
       pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
       thumbPreview.classList.add('hidden');
-      attachmentName.textContent = file.name;
-      attachmentChip.classList.remove('hidden');
     } else {
       const text = await file.text();
       pendingAttachment = { type: 'text', name: file.name, extractedText: text };
       thumbPreview.classList.add('hidden');
-      attachmentName.textContent = file.name;
-      attachmentChip.classList.remove('hidden');
     }
+    attachmentName.textContent = file.name;
+    attachmentChip.classList.remove('hidden');
+    triggerHaptic(20);
   } catch (err) {
     alert('Gagal memproses file: ' + err.message);
   } finally {
     fileProcessingBar.classList.add('hidden');
-    fileInput.value = '';
+    fileInputGallery.value = '';
+    fileInputCamera.value = '';
+    fileInputDocs.value = '';
     sendBtn.disabled = false;
   }
-});
+}
 
 function fileToBase64(file) {
   return new Promise((res, rej) => {
@@ -279,11 +464,14 @@ removeAttachmentBtn.addEventListener('click', () => {
   thumbPreview.classList.add('hidden');
 });
 
-// --- SUBMIT PESAN CHAT ---
+// --- SUBMIT PESAN CHAT & DYNAMIC TITLE GENERATION ---
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
   if (!text && !pendingAttachment) return;
+
+  triggerHaptic(15);
+  retryBar.classList.add('hidden');
 
   const session = getCurrentSession();
   let aiContentPayload;
@@ -311,10 +499,6 @@ chatForm.addEventListener('submit', async (e) => {
     aiContentPayload = text;
   }
 
-  if (session.messages.length === 0) {
-    session.title = text ? text.substring(0, 24) : (pendingAttachment ? pendingAttachment.name : 'Obrolan');
-  }
-
   userInput.value = '';
   userInput.style.height = 'auto';
   pendingAttachment = null;
@@ -327,12 +511,13 @@ chatForm.addEventListener('submit', async (e) => {
   const userMsgIndex = session.messages.length;
   appendUserBubble(displayHtml, true, userMsgIndex);
   session.messages.push({ role: 'user', content: aiContentPayload, displayHtml: displayHtml });
+  session.updatedAt = Date.now();
   saveSessions();
 
   await requestAIResponse();
 });
 
-// Eksekusi Respon Streaming + Realtime Typing & Video Loader
+// Eksekusi Streaming Respon dengan Retry & Realtime Typing
 async function requestAIResponse(isRegenerate = false) {
   const session = getCurrentSession();
   const aiBubble = appendAiBubble(true, true);
@@ -355,11 +540,15 @@ async function requestAIResponse(isRegenerate = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelSelect.value,
+        temperature: parseFloat(tempRange.value) || 0.7,
         messages: payloadMessages
       })
     });
 
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `HTTP ${res.status}`);
+    }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -385,7 +574,13 @@ async function requestAIResponse(isRegenerate = false) {
           if (chunk) {
             fullRes += chunk;
             updateAiTypingContent(aiBubble, fullRes);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            // Cek status scrolling: jika user scroll ke atas, jangan paksa scroll
+            if (!userHasScrolledUp) {
+              chatBox.scrollTop = chatBox.scrollHeight;
+            } else {
+              scrollDot.classList.remove('hidden');
+            }
           }
         } catch (_) {}
       }
@@ -398,10 +593,16 @@ async function requestAIResponse(isRegenerate = false) {
     } else {
       session.messages.push({ role: 'assistant', content: fullRes });
     }
+    session.updatedAt = Date.now();
     saveSessions();
 
     const aiMsgIndex = session.messages.length - 1;
     addBubbleActionButtons(aiBubble, fullRes, aiMsgIndex);
+
+    // Dynamic Title Generation Otomatis jika obrolan masih baru
+    if (session.messages.length === 2 && session.title === 'Obrolan Baru') {
+      generateDynamicTitle(session);
+    }
 
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -410,6 +611,8 @@ async function requestAIResponse(isRegenerate = false) {
       saveSessions();
     } else {
       aiBubble.innerHTML = `<span class="text-red-600 font-mono">[Error: ${err.message}]</span>`;
+      // Tampilkan Auto-Retry bar
+      retryBar.classList.remove('hidden');
     }
   } finally {
     sendBtn.disabled = false;
@@ -418,13 +621,55 @@ async function requestAIResponse(isRegenerate = false) {
   }
 }
 
+// Auto-Retry Handler
+retryBtn.addEventListener('click', async () => {
+  triggerHaptic(15);
+  retryBar.classList.add('hidden');
+  const session = getCurrentSession();
+  if (session && session.messages.length > 0) {
+    await requestAIResponse(false);
+  }
+});
+
 stopBtn.addEventListener('click', () => {
+  triggerHaptic(15);
   if (currentAbortController) {
     currentAbortController.abort();
   }
 });
 
-// Render Tampilan Bubble Chat
+// Fitur Dynamic Title Otomatis (3-4 Kata)
+async function generateDynamicTitle(session) {
+  try {
+    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum topik pertanyaan ini: " + session.messages[0].content;
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelSelect.value,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const text = await res.text();
+    const lines = text.split('\n');
+    let titleResult = '';
+    for (const l of lines) {
+      if (l.startsWith('data:') && !l.includes('[DONE]')) {
+        try {
+          const p = JSON.parse(l.replace('data:', '').trim());
+          titleResult += p.choices?.[0]?.delta?.content || '';
+        } catch (_) {}
+      }
+    }
+    if (titleResult.trim()) {
+      session.title = titleResult.replace(/["\n.]/g, '').trim().substring(0, 26);
+      saveSessions();
+    }
+  } catch (_) {}
+}
+
+// Render Bubble Chat
 function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   const el = document.createElement('div');
   el.className = 'flex flex-col items-end gap-1';
@@ -465,6 +710,7 @@ function updateAiTypingContent(bubbleEl, text) {
   if (body) {
     body.innerHTML = marked.parse(text);
     body.querySelectorAll('pre code').forEach((b) => hljs.highlightElement(b));
+    injectCanvasActionButtons(body);
   }
 }
 
@@ -475,11 +721,73 @@ function finalizeAiBubble(bubbleEl, text) {
   if (body) {
     body.innerHTML = marked.parse(text);
     body.querySelectorAll('pre code').forEach((b) => hljs.highlightElement(b));
+    injectCanvasActionButtons(body);
   }
 }
 
-// Edit & Regenerate Logika
+// --- FITUR CANVAS (LIVE CODE PLAYGROUND) ---
+const canvasModal = document.getElementById('canvas-modal');
+const closeCanvasBtn = document.getElementById('close-canvas-btn');
+const canvasCodeInput = document.getElementById('canvas-code-input');
+const canvasIframe = document.getElementById('canvas-iframe');
+const refreshCanvasBtn = document.getElementById('refresh-canvas-btn');
+
+function injectCanvasActionButtons(container) {
+  container.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.canvas-run-btn')) return;
+
+    const codeEl = pre.querySelector('code');
+    const codeText = codeEl ? codeEl.innerText : pre.innerText;
+
+    // Jika kode mengandung sintaks HTML / JS, berikan tombol Live Canvas
+    const isHtmlOrJs = codeText.includes('<html') || codeText.includes('<!DOCTYPE') || codeText.includes('<div') || codeText.includes('<button') || codeText.includes('<script');
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'absolute top-2 right-2 flex gap-1 z-10 not-prose';
+    toolbar.innerHTML = `
+      ${isHtmlOrJs ? '<button class="px-2 py-0.5 bg-white text-black text-[10px] uppercase font-bold border border-black hover:bg-black hover:text-white canvas-run-btn">Buka Canvas 🌐</button>' : ''}
+      <button class="px-2 py-0.5 bg-neutral-800 text-white text-[10px] uppercase font-bold hover:bg-neutral-700 copy-code-btn">Salin</button>
+    `;
+
+    toolbar.querySelector('.copy-code-btn').addEventListener('click', () => {
+      triggerHaptic(15);
+      navigator.clipboard.writeText(codeText);
+      alert('Kode disalin!');
+    });
+
+    if (isHtmlOrJs) {
+      toolbar.querySelector('.canvas-run-btn').addEventListener('click', () => {
+        triggerHaptic(20);
+        openCanvasWithCode(codeText);
+      });
+    }
+
+    pre.appendChild(toolbar);
+  });
+}
+
+function openCanvasWithCode(code) {
+  canvasCodeInput.value = code;
+  renderCanvasIframe(code);
+  canvasModal.classList.remove('hidden');
+}
+
+function renderCanvasIframe(code) {
+  canvasIframe.srcdoc = code;
+}
+
+refreshCanvasBtn.addEventListener('click', () => {
+  triggerHaptic(15);
+  renderCanvasIframe(canvasCodeInput.value);
+});
+
+closeCanvasBtn.addEventListener('click', () => {
+  canvasModal.classList.add('hidden');
+});
+
+// Edit & Action Buttons Bubble
 function handleEditMessage(index) {
+  triggerHaptic(15);
   const session = getCurrentSession();
   const targetMsg = session.messages[index];
   if (!targetMsg) return;
@@ -494,20 +802,26 @@ function handleEditMessage(index) {
 }
 
 function addBubbleActionButtons(bubbleEl, text, index) {
+  const stats = calculateReadingStats(text);
   const actions = document.createElement('div');
-  actions.className = 'mt-3 pt-2 border-t border-black/20 flex gap-2 text-xs not-prose';
+  actions.className = 'mt-3 pt-2 border-t border-black/20 flex flex-wrap items-center justify-between gap-2 text-xs not-prose';
   actions.innerHTML = `
-    <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] copy-btn">Salin</button>
-    <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] regen-btn">Regenerate 🔁</button>
-    <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] speak-btn">Bicara 🔊</button>
+    <span class="text-[10px] font-mono text-neutral-500">${stats}</span>
+    <div class="flex gap-1.5">
+      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] copy-btn">Salin</button>
+      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] regen-btn">Regenerate 🔁</button>
+      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] speak-btn">Bicara 🔊</button>
+    </div>
   `;
 
   actions.querySelector('.copy-btn').addEventListener('click', () => {
+    triggerHaptic(15);
     navigator.clipboard.writeText(text);
     alert('Teks disalin!');
   });
 
   actions.querySelector('.regen-btn').addEventListener('click', async () => {
+    triggerHaptic(15);
     const session = getCurrentSession();
     session.messages.pop();
     saveSessions();
@@ -516,6 +830,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   });
 
   actions.querySelector('.speak-btn').addEventListener('click', () => {
+    triggerHaptic(15);
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text.replace(/[#*`]/g, ''));
@@ -528,13 +843,15 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- FITUR VOICE CALL TELEPON DUA ARAH (ANTI-ECHO & JEDA BICARA NATURAL) ---
+// --- VOICE CALL DENGAN VISUALIZER WAVEFORM REALTIME & AUDIO INTERRUPT ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
 const callStatus = document.getElementById('call-status');
 const callTimer = document.getElementById('call-timer');
 const callLiveText = document.getElementById('call-live-text');
+const waveformCanvas = document.getElementById('waveform-canvas');
+const canvasCtx = waveformCanvas.getContext('2d');
 
 let isCalling = false;
 let callInterval = null;
@@ -543,6 +860,13 @@ let callRecognition = null;
 let isAiSpeaking = false;
 let silenceTimer = null;
 let accumulatedUserSpeech = '';
+
+// Web Audio API State
+let audioContext = null;
+let analyser = null;
+let micSourceNode = null;
+let micStream = null;
+let animFrameId = null;
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -559,28 +883,29 @@ if (SR) {
   };
 
   callRecognition.onresult = (e) => {
-    // 1. Tolak semua input suara jika AI sedang berbicara (Cegah gema speaker HP)
-    if (!isCalling || isAiSpeaking) return;
+    if (!isCalling) return;
 
     let interim = '';
     let final = '';
 
     for (let i = e.resultIndex; i < e.results.length; ++i) {
-      if (e.results[i].isFinal) {
-        final += e.results[i][0].transcript;
-      } else {
-        interim += e.results[i][0].transcript;
-      }
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
     }
 
     const currentSpoken = (final || interim).trim();
 
-    // Abaikan suara desah / kresek yang terlalu pendek
-    if (currentSpoken.length > 1) {
+    // FITUR 4: AUDIO INTERRUPT (Jika AI sedang bicara dan Anda menyela bicara)
+    if (isAiSpeaking && currentSpoken.length > 2) {
+      window.speechSynthesis.cancel();
+      isAiSpeaking = false;
+      callStatus.textContent = 'Mendengarkan Anda...';
+    }
+
+    if (currentSpoken.length > 1 && !isAiSpeaking) {
       callLiveText.textContent = `Anda: "${currentSpoken}"`;
       accumulatedUserSpeech = currentSpoken;
 
-      // 2. Debounce jeda 1.2 detik (Menunggu jeda diam tanda selesai bicara)
       clearTimeout(silenceTimer);
       silenceTimer = setTimeout(() => {
         if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
@@ -596,7 +921,6 @@ if (SR) {
   };
 
   callRecognition.onerror = (e) => {
-    console.warn('Call voice error:', e.error);
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
       setTimeout(() => {
         try { callRecognition.start(); } catch (_) {}
@@ -613,7 +937,8 @@ if (SR) {
   };
 }
 
-callBtn.addEventListener('click', () => {
+callBtn.addEventListener('click', async () => {
+  triggerHaptic(20);
   if (!callRecognition) {
     alert('Browser tidak mendukung Speech Recognition untuk mode telepon.');
     return;
@@ -621,13 +946,26 @@ callBtn.addEventListener('click', () => {
   startCall();
 });
 
-function startCall() {
+async function startCall() {
   isCalling = true;
   isAiSpeaking = false;
   accumulatedUserSpeech = '';
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
+
+  // Inisialisasi Web Audio Analyser untuk Live Waveform
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 64;
+    micSourceNode = audioContext.createMediaStreamSource(micStream);
+    micSourceNode.connect(analyser);
+    drawLiveWaveform();
+  } catch (err) {
+    console.warn('Web Audio init gagal:', err);
+  }
 
   callInterval = setInterval(() => {
     callSeconds++;
@@ -639,13 +977,39 @@ function startCall() {
   speakCallResponse("Halo! Saya RZchat. Ada yang bisa saya bantu?");
 }
 
+// Gambar Gelombang Suara (Waveform) Realtime
+function drawLiveWaveform() {
+  if (!isCalling) return;
+
+  animFrameId = requestAnimationFrame(drawLiveWaveform);
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+
+  canvasCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+  const barWidth = (waveformCanvas.width / bufferLength) * 1.5;
+  let x = 0;
+
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = (dataArray[i] / 255) * waveformCanvas.height;
+    canvasCtx.fillStyle = '#000000';
+    canvasCtx.fillRect(x, waveformCanvas.height - barHeight, barWidth - 2, barHeight);
+    x += barWidth;
+  }
+}
+
 hangupBtn.addEventListener('click', endCall);
 
 function endCall() {
+  triggerHaptic(20);
   isCalling = false;
   isAiSpeaking = false;
   clearTimeout(silenceTimer);
   clearInterval(callInterval);
+  cancelAnimationFrame(animFrameId);
+
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioContext) audioContext.close();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (callRecognition) {
     try { callRecognition.stop(); } catch (_) {}
@@ -655,7 +1019,7 @@ function endCall() {
 
 async function sendVoiceToAI(text) {
   const session = getCurrentSession();
-  const callPrompt = `[MODE TELEPON AKTIF: Jawablah sangat singkat, padat, santai maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
+  const callPrompt = `[MODE TELEPON: Jawab sangat singkat, padat, dan santai maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
   
   session.messages.push({ role: 'user', content: callPrompt, displayHtml: escapeHtml(text) });
   saveSessions();
@@ -666,6 +1030,7 @@ async function sendVoiceToAI(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelSelect.value,
+        temperature: 0.5,
         messages: session.messages.map(m => ({ role: m.role, content: m.content }))
       })
     });
@@ -697,19 +1062,16 @@ async function sendVoiceToAI(text) {
 
   } catch (err) {
     callLiveText.textContent = 'Koneksi terputus.';
-    speakCallResponse("Maaf, suara kurang jelas. Bisa tolong ulangi?");
+    speakCallResponse("Maaf, suara terputus. Bisa tolong ulangi?");
   }
 }
 
 function speakCallResponse(text) {
   if (!('speechSynthesis' in window) || !isCalling) return;
 
-  // Kunci mikrofon: matikan pendengar suara saat AI mulai bicara
   window.speechSynthesis.cancel();
   isAiSpeaking = true;
-  callStatus.textContent = 'AI sedang berbicara...';
-
-  try { callRecognition.stop(); } catch (_) {}
+  callStatus.textContent = 'AI sedang berbicara... (Sela untuk interupsi)';
 
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
@@ -720,8 +1082,6 @@ function speakCallResponse(text) {
 
   const resumeListening = () => {
     if (!isCalling) return;
-    
-    // Jeda buffer 600ms agar gema speaker benar-benar hilang sebelum mic mendengarkan lagi
     setTimeout(() => {
       isAiSpeaking = false;
       accumulatedUserSpeech = '';
@@ -738,6 +1098,7 @@ function speakCallResponse(text) {
 
 // Ekspor Obrolan Sesi
 exportTxtBtn.addEventListener('click', () => {
+  triggerHaptic(15);
   const session = getCurrentSession();
   let content = `=== RIWAYAT OBROLAN RZCHAT ===\nJudul: ${session.title}\n\n`;
   session.messages.forEach(m => {
@@ -748,6 +1109,7 @@ exportTxtBtn.addEventListener('click', () => {
 });
 
 exportJsonBtn.addEventListener('click', () => {
+  triggerHaptic(15);
   const session = getCurrentSession();
   downloadFile(JSON.stringify(session, null, 2), `${session.title}.json`, 'application/json');
 });
@@ -765,19 +1127,24 @@ function escapeHtml(str) {
 }
 
 // Navigasi Drawer & Modal
-menuBtn.addEventListener('click', () => sidebarDrawer.classList.remove('hidden'));
+menuBtn.addEventListener('click', () => {
+  triggerHaptic(15);
+  sidebarDrawer.classList.remove('hidden');
+});
 closeDrawerBtn.addEventListener('click', () => sidebarDrawer.classList.add('hidden'));
 sidebarDrawer.addEventListener('click', (e) => {
   if (e.target === sidebarDrawer) sidebarDrawer.classList.add('hidden');
 });
 
 newChatBtn.addEventListener('click', () => {
+  triggerHaptic(15);
   initNewSession();
   loadCurrentChat();
   sidebarDrawer.classList.add('hidden');
 });
 
 clearAllSessionsBtn.addEventListener('click', () => {
+  triggerHaptic(25);
   if (confirm('Kosongkan seluruh riwayat chat?')) {
     localStorage.removeItem(SESSIONS_KEY);
     localStorage.removeItem(ACTIVE_SESSION_KEY);
@@ -788,9 +1155,12 @@ clearAllSessionsBtn.addEventListener('click', () => {
   }
 });
 
-settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+settingsBtn.addEventListener('click', () => {
+  triggerHaptic(15);
+  settingsModal.classList.remove('hidden');
+});
 closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 
-// Inisialisasi awal saat web dimuat
+// Mulai aplikasi
 renderSessionList();
 loadCurrentChat();
