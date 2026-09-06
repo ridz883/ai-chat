@@ -18,18 +18,20 @@ if ('serviceWorker' in navigator) {
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  installBtn.classList.remove('hidden');
+  if (installBtn) installBtn.classList.remove('hidden');
 });
 
-installBtn.addEventListener('click', async () => {
-  triggerHaptic(20);
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') installBtn.classList.add('hidden');
-    deferredPrompt = null;
-  }
-});
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    triggerHaptic(20);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') installBtn.classList.add('hidden');
+      deferredPrompt = null;
+    }
+  });
+}
 
 // --- SESSION STORAGE CONFIGURATION ---
 const SESSIONS_KEY = 'rzchat_sessions';
@@ -47,21 +49,27 @@ modelSelect.value = localStorage.getItem(MODEL_KEY) || 'qwen/qwen3.8-max:free';
 modelSelect.addEventListener('change', () => localStorage.setItem(MODEL_KEY, modelSelect.value));
 
 const systemPromptInput = document.getElementById('system-prompt-input');
-systemPromptInput.value = localStorage.getItem(SYSTEM_PROMPT_KEY) || '';
-systemPromptInput.addEventListener('change', () => localStorage.setItem(SYSTEM_PROMPT_KEY, systemPromptInput.value));
+if (systemPromptInput) {
+  systemPromptInput.value = localStorage.getItem(SYSTEM_PROMPT_KEY) || '';
+  systemPromptInput.addEventListener('change', () => localStorage.setItem(SYSTEM_PROMPT_KEY, systemPromptInput.value));
+}
 
 const speechRateRange = document.getElementById('speech-rate-range');
-speechRateRange.value = localStorage.getItem(SPEECH_RATE_KEY) || '1.0';
-speechRateRange.addEventListener('change', () => localStorage.setItem(SPEECH_RATE_KEY, speechRateRange.value));
+if (speechRateRange) {
+  speechRateRange.value = localStorage.getItem(SPEECH_RATE_KEY) || '1.0';
+  speechRateRange.addEventListener('change', () => localStorage.setItem(SPEECH_RATE_KEY, speechRateRange.value));
+}
 
 const tempRange = document.getElementById('temp-range');
 const tempValDisplay = document.getElementById('temp-val-display');
-tempRange.value = localStorage.getItem(TEMPERATURE_KEY) || '0.7';
-tempValDisplay.textContent = tempRange.value;
-tempRange.addEventListener('input', () => {
+if (tempRange && tempValDisplay) {
+  tempRange.value = localStorage.getItem(TEMPERATURE_KEY) || '0.7';
   tempValDisplay.textContent = tempRange.value;
-  localStorage.setItem(TEMPERATURE_KEY, tempRange.value);
-});
+  tempRange.addEventListener('input', () => {
+    tempValDisplay.textContent = tempRange.value;
+    localStorage.setItem(TEMPERATURE_KEY, tempRange.value);
+  });
+}
 
 if (!currentSessionId || !sessions.find(s => s.id === currentSessionId)) {
   initNewSession();
@@ -99,7 +107,6 @@ const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const micBtn = document.getElementById('mic-btn');
 
-// Input File Dokumen & Galeri Universal
 const btnGallery = document.getElementById('btn-gallery');
 const btnCamera = document.getElementById('btn-camera');
 const inputUniversal = document.getElementById('input-universal');
@@ -137,7 +144,6 @@ let undoTimeout = null;
 
 marked.setOptions({ breaks: true, gfm: true });
 
-// Mobile Viewport Keyboard Fix
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => {
     document.body.style.height = `${window.visualViewport.height}px`;
@@ -145,13 +151,12 @@ if (window.visualViewport) {
   });
 }
 
-// --- SMART AUTO-SCROLL & FLOATING DOWN BUTTON ---
+// --- SMART AUTO-SCROLL ---
 let userHasScrolledUp = false;
 
 chatBox.addEventListener('scroll', () => {
   const threshold = 80;
   const isNearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= threshold;
-  
   if (!isNearBottom) {
     userHasScrolledUp = true;
     scrollBottomBtn.classList.remove('hidden');
@@ -269,18 +274,20 @@ function togglePinSession(id) {
   }
 }
 
-undoBtn.addEventListener('click', () => {
-  if (deletedSessionBackup) {
-    triggerHaptic(20);
-    sessions.splice(deletedSessionBackup.index, 0, deletedSessionBackup.session);
-    currentSessionId = deletedSessionBackup.session.id;
-    deletedSessionBackup = null;
-    clearTimeout(undoTimeout);
-    undoToast.classList.add('hidden');
-    saveSessions();
-    loadCurrentChat();
-  }
-});
+if (undoBtn) {
+  undoBtn.addEventListener('click', () => {
+    if (deletedSessionBackup) {
+      triggerHaptic(20);
+      sessions.splice(deletedSessionBackup.index, 0, deletedSessionBackup.session);
+      currentSessionId = deletedSessionBackup.session.id;
+      deletedSessionBackup = null;
+      clearTimeout(undoTimeout);
+      undoToast.classList.add('hidden');
+      saveSessions();
+      loadCurrentChat();
+    }
+  });
+}
 
 function calculateReadingStats(text) {
   const clean = text.replace(/[*#`_\[\]()]/g, '').trim();
@@ -299,7 +306,7 @@ function loadCurrentChat() {
       <div id="empty-state" class="text-center py-24 select-none">
         <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-12 h-12 mx-auto mb-3 object-contain" alt="RZchat Logo">
         <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-        <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Voice Call · Vision Multimodal · Live Canvas</p>
+        <p class="text-[11px] text-neutral-400 mt-1">Mendukung Analisis Video, Gambar, Dokumen PDF, & Panggilan AI</p>
       </div>`;
     return;
   }
@@ -317,7 +324,7 @@ function loadCurrentChat() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- VOICE NOTES INPUT CHAT (STT) ---
+// --- VOICE NOTES INPUT BIASA (CHAT) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
@@ -354,7 +361,49 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- FILE PICKER DOCUMENTS & CAMERA ---
+// --- EKSTRAKSI FRAME VIDEO (FITUR 3: BACA VIDEO) ---
+async function extractFramesFromVideo(file, maxFrames = 3) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.src = URL.createObjectURL(file);
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = async () => {
+      const duration = video.duration || 1;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const frames = [];
+
+      const times = [];
+      for (let i = 1; i <= maxFrames; i++) {
+        times.push((duration / (maxFrames + 1)) * i);
+      }
+
+      for (const time of times) {
+        await new Promise((r) => {
+          video.currentTime = time;
+          video.onseeked = () => {
+            const scale = Math.min(1, 640 / (video.videoWidth || 640));
+            canvas.width = (video.videoWidth || 640) * scale;
+            canvas.height = (video.videoHeight || 480) * scale;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas.toDataURL('image/jpeg', 0.7));
+            r();
+          };
+        });
+      }
+
+      URL.revokeObjectURL(video.src);
+      resolve(frames);
+    };
+
+    video.onerror = (e) => reject(new Error('Gagal memuat video untuk diekstrak.'));
+  });
+}
+
+// --- FILE PICKER MULTI-FORMAT (FOTO, VIDEO, PDF, DOKUMEN) ---
 btnGallery.addEventListener('click', () => {
   triggerHaptic(15);
   inputUniversal.click();
@@ -380,12 +429,18 @@ btnCamera.addEventListener('click', () => {
         pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
         thumbPreview.style.backgroundImage = `url(${base64Data})`;
         thumbPreview.classList.remove('hidden');
-      } else if (file.type === 'application/pdf') {
-        processingStatus.textContent = 'Mengekstrak PDF...';
+      } else if (file.type.startsWith('video/')) {
+        processingStatus.textContent = 'Menganalisis frame video...';
+        const frames = await extractFramesFromVideo(file);
+        pendingAttachment = { type: 'video', name: file.name, frames: frames };
+        thumbPreview.style.backgroundImage = `url(${frames[0]})`;
+        thumbPreview.classList.remove('hidden');
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        processingStatus.textContent = 'Mengekstrak teks PDF...';
         const buf = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
         let text = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
+        for (let i = 1; i <= Math.min(pdf.numPages, 15); i++) {
           const page = await pdf.getPage(i);
           const c = await page.getTextContent();
           text += c.items.map(it => it.str).join(' ') + '\n';
@@ -393,16 +448,17 @@ btnCamera.addEventListener('click', () => {
         pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
         thumbPreview.classList.add('hidden');
       } else {
-        processingStatus.textContent = 'Membaca berkas...';
+        processingStatus.textContent = 'Membaca dokumen...';
         const text = await file.text();
-        pendingAttachment = { type: 'text', name: file.name, extractedText: text };
+        pendingAttachment = { type: 'text', name: file.name, extractedText: text.substring(0, 15000) };
         thumbPreview.classList.add('hidden');
       }
+
       attachmentName.textContent = file.name;
       attachmentChip.classList.remove('hidden');
       triggerHaptic(20);
     } catch (err) {
-      alert('Gagal membaca berkas: ' + err.message);
+      alert('Gagal memproses berkas: ' + err.message);
     } finally {
       fileProcessingBar.classList.add('hidden');
       inp.value = '';
@@ -449,6 +505,16 @@ chatForm.addEventListener('submit', async (e) => {
         { type: "text", text: text || "Jelaskan dan analisis isi gambar ini secara detail." },
         { type: "image_url", image_url: { url: pendingAttachment.base64Url } }
       ];
+    } else if (pendingAttachment.type === 'video') {
+      displayHtml = `
+        <div class="mb-2"><img src="${pendingAttachment.frames[0]}" class="max-h-60 rounded border border-white/20 object-contain"></div>
+        <div class="text-[10px] font-mono text-neutral-400 mb-1">🎬 Cuplikan Frame Video: ${escapeHtml(pendingAttachment.name)}</div>
+        <div>${escapeHtml(text || 'Analisis video ini')}</div>
+      `;
+      aiContentPayload = [
+        { type: "text", text: `${text || "Analisis apa yang terjadi dalam video ini berdasarkan cuplikan frame berikut:"}\n[Nama Video: ${pendingAttachment.name}]` },
+        ...pendingAttachment.frames.map(f => ({ type: "image_url", image_url: { url: f } }))
+      ];
     } else {
       displayHtml = `
         <div class="text-xs font-mono bg-white/10 p-1 mb-1 border border-white/20">📄 ${escapeHtml(pendingAttachment.name)}</div>
@@ -490,7 +556,7 @@ async function requestAIResponse(isRegenerate = false) {
   let fullRes = '';
 
   let payloadMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
-  const customSystemPrompt = systemPromptInput.value.trim();
+  const customSystemPrompt = systemPromptInput ? systemPromptInput.value.trim() : '';
   if (customSystemPrompt) {
     payloadMessages.unshift({ role: 'system', content: customSystemPrompt });
   }
@@ -502,7 +568,7 @@ async function requestAIResponse(isRegenerate = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelSelect.value,
-        temperature: parseFloat(tempRange.value) || 0.7,
+        temperature: parseFloat(tempRange?.value) || 0.7,
         messages: payloadMessages
       })
     });
@@ -579,26 +645,29 @@ async function requestAIResponse(isRegenerate = false) {
   }
 }
 
-retryBtn.addEventListener('click', async () => {
-  triggerHaptic(15);
-  retryBar.classList.add('hidden');
-  const session = getCurrentSession();
-  if (session && session.messages.length > 0) {
-    await requestAIResponse(false);
-  }
-});
+if (retryBtn) {
+  retryBtn.addEventListener('click', async () => {
+    triggerHaptic(15);
+    retryBar.classList.add('hidden');
+    const session = getCurrentSession();
+    if (session && session.messages.length > 0) {
+      await requestAIResponse(false);
+    }
+  });
+}
 
-stopBtn.addEventListener('click', () => {
-  triggerHaptic(15);
-  if (currentAbortController) {
-    currentAbortController.abort();
-  }
-});
+if (stopBtn) {
+  stopBtn.addEventListener('click', () => {
+    triggerHaptic(15);
+    if (currentAbortController) {
+      currentAbortController.abort();
+    }
+  });
+}
 
-// Dynamic Title Otomatis
 async function generateDynamicTitle(session) {
   try {
-    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum pertanyaan ini: " + (typeof session.messages[0].content === 'string' ? session.messages[0].content : 'Lampiran');
+    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum topik ini: " + (typeof session.messages[0].content === 'string' ? session.messages[0].content : 'Media File');
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -626,7 +695,6 @@ async function generateDynamicTitle(session) {
   } catch (_) {}
 }
 
-// Render Bubble UI
 function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   const el = document.createElement('div');
   el.className = 'flex flex-col items-end gap-1';
@@ -695,7 +763,6 @@ function injectCanvasActionButtons(container) {
 
     const codeEl = pre.querySelector('code');
     const codeText = codeEl ? codeEl.innerText : pre.innerText;
-
     const isHtmlOrJs = codeText.includes('<html') || codeText.includes('<!DOCTYPE') || codeText.includes('<div') || codeText.includes('<button') || codeText.includes('<script');
 
     const toolbar = document.createElement('div');
@@ -732,16 +799,19 @@ function renderCanvasIframe(code) {
   canvasIframe.srcdoc = code;
 }
 
-refreshCanvasBtn.addEventListener('click', () => {
-  triggerHaptic(15);
-  renderCanvasIframe(canvasCodeInput.value);
-});
+if (refreshCanvasBtn) {
+  refreshCanvasBtn.addEventListener('click', () => {
+    triggerHaptic(15);
+    renderCanvasIframe(canvasCodeInput.value);
+  });
+}
 
-closeCanvasBtn.addEventListener('click', () => {
-  canvasModal.classList.add('hidden');
-});
+if (closeCanvasBtn) {
+  closeCanvasBtn.addEventListener('click', () => {
+    canvasModal.classList.add('hidden');
+  });
+}
 
-// Edit & Actions Bubble
 function handleEditMessage(index) {
   triggerHaptic(15);
   const session = getCurrentSession();
@@ -791,7 +861,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text.replace(/[#*`]/g, ''));
       u.lang = 'id-ID';
-      u.rate = parseFloat(speechRateRange.value) || 1.0;
+      u.rate = parseFloat(speechRateRange ? speechRateRange.value : '1.0') || 1.0;
       window.speechSynthesis.speak(u);
     }
   });
@@ -799,7 +869,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- VOICE CALL DUA ARAH STABIL & BEBAS DEADLOCK ---
+// --- PERBAIKAN TOTAL VOICE CALL (CALL AI) ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -813,9 +883,8 @@ let callInterval = null;
 let callSeconds = 0;
 let callRecognition = null;
 let isAiSpeaking = false;
-let silenceTimer = null;
-let speechUnlockTimeout = null;
-let accumulatedUserSpeech = '';
+let callDebounceTimer = null;
+let lastSpeechTranscript = '';
 
 const CallSR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -828,76 +897,62 @@ if (CallSR) {
   callRecognition.onstart = () => {
     if (isCalling && !isAiSpeaking) {
       callStatus.textContent = 'Mendengarkan Anda...';
-      waveformContainer.classList.add('wave-active');
+      if (waveformContainer) waveformContainer.classList.add('wave-active');
     }
   };
 
   callRecognition.onresult = (e) => {
-    if (!isCalling) return;
+    if (!isCalling || isAiSpeaking) return;
 
-    // Audio Interrupt: Jika AI sedang bicara dan pengguna memotong omongan
-    if (isAiSpeaking) {
-      window.speechSynthesis.cancel();
-      isAiSpeaking = false;
-      callStatus.textContent = 'Mendengarkan Anda...';
-    }
-
-    let interim = '';
-    let final = '';
-
+    let textBuffer = '';
     for (let i = e.resultIndex; i < e.results.length; ++i) {
-      if (e.results[i].isFinal) {
-        final += e.results[i][0].transcript;
-      } else {
-        interim += e.results[i][0].transcript;
-      }
+      textBuffer += e.results[i][0].transcript;
     }
 
-    const currentSpoken = (final || interim).trim();
+    const currentText = textBuffer.trim();
+    if (currentText.length > 0) {
+      lastSpeechTranscript = currentText;
+      callLiveText.textContent = `Anda: "${currentText}"`;
+      if (waveformContainer) waveformContainer.classList.add('wave-active');
 
-    if (currentSpoken.length > 1) {
-      callLiveText.textContent = `Anda: "${currentSpoken}"`;
-      accumulatedUserSpeech = currentSpoken;
-      waveformContainer.classList.add('wave-active');
-
-      // Debounce: deteksi hening 1.2 detik tanda selesai berbicara
-      clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => {
-        if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
-          const textToSend = accumulatedUserSpeech.trim();
-          accumulatedUserSpeech = '';
-
-          try { callRecognition.stop(); } catch (_) {}
-          waveformContainer.classList.remove('wave-active');
-          callStatus.textContent = 'AI sedang berpikir...';
-          sendVoiceToAI(textToSend);
+      // Jeda hening 1 detik untuk otomatis kirim ke AI
+      clearTimeout(callDebounceTimer);
+      callDebounceTimer = setTimeout(() => {
+        if (lastSpeechTranscript.length > 0 && !isAiSpeaking && isCalling) {
+          const spoken = lastSpeechTranscript;
+          lastSpeechTranscript = '';
+          executeVoiceTurn(spoken);
         }
-      }, 1200);
+      }, 1000);
     }
   };
 
   callRecognition.onerror = (e) => {
-    console.warn('Call SR error:', e.error);
+    console.warn('Call voice error:', e.error);
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
-      setTimeout(() => {
-        try { callRecognition.start(); } catch (_) {}
-      }, 400);
+      setTimeout(() => startCallMicSafe(), 300);
     }
   };
 
   callRecognition.onend = () => {
     if (isCalling && !isAiSpeaking) {
-      setTimeout(() => {
-        try { callRecognition.start(); } catch (_) {}
-      }, 400);
+      setTimeout(() => startCallMicSafe(), 300);
     }
   };
+}
+
+function startCallMicSafe() {
+  if (!isCalling || isAiSpeaking || !callRecognition) return;
+  try {
+    callRecognition.start();
+    callStatus.textContent = 'Mendengarkan Anda...';
+  } catch (_) {}
 }
 
 callBtn.addEventListener('click', () => {
   triggerHaptic(20);
   if (!callRecognition) {
-    alert('Browser tidak mendukung Speech Recognition untuk mode telepon.');
+    alert('Browser tidak mendukung Speech Recognition.');
     return;
   }
   startCall();
@@ -906,7 +961,7 @@ callBtn.addEventListener('click', () => {
 function startCall() {
   isCalling = true;
   isAiSpeaking = false;
-  accumulatedUserSpeech = '';
+  lastSpeechTranscript = '';
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
@@ -927,23 +982,26 @@ function endCall() {
   triggerHaptic(20);
   isCalling = false;
   isAiSpeaking = false;
-  clearTimeout(silenceTimer);
-  clearTimeout(speechUnlockTimeout);
+  clearTimeout(callDebounceTimer);
   clearInterval(callInterval);
 
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (callRecognition) {
     try { callRecognition.stop(); } catch (_) {}
   }
-  waveformContainer.classList.remove('wave-active');
+  if (waveformContainer) waveformContainer.classList.remove('wave-active');
   callOverlay.classList.add('hidden');
 }
 
-async function sendVoiceToAI(text) {
+async function executeVoiceTurn(text) {
+  isAiSpeaking = true;
+  callStatus.textContent = 'AI sedang berpikir...';
+  if (waveformContainer) waveformContainer.classList.remove('wave-active');
+
+  try { if (callRecognition) callRecognition.stop(); } catch (_) {}
+
   const session = getCurrentSession();
-  const callPrompt = `[MODE TELEPON AKTIF: Jawablah langsung, santai, ringkas maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
-  
-  session.messages.push({ role: 'user', content: callPrompt, displayHtml: escapeHtml(text) });
+  session.messages.push({ role: 'user', content: text, displayHtml: escapeHtml(text) });
   saveSessions();
 
   try {
@@ -953,7 +1011,13 @@ async function sendVoiceToAI(text) {
       body: JSON.stringify({
         model: modelSelect.value,
         temperature: 0.5,
-        messages: session.messages.map(m => ({ role: m.role, content: m.content }))
+        messages: [
+          ...session.messages.slice(-6).map(m => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : 'lampiran media'
+          })),
+          { role: 'system', content: 'MODE TELEPON AKTIF: Jawab langsung, sangat ringkas maksimal 2 kalimat santai tanpa markdown, bullet points, atau simbol.' }
+        ]
       })
     });
 
@@ -978,13 +1042,14 @@ async function sendVoiceToAI(text) {
       }
     }
 
+    if (!fullRes.trim()) throw new Error('Balasan kosong');
+
     session.messages.push({ role: 'assistant', content: fullRes });
     saveSessions();
     speakCallResponse(fullRes);
 
   } catch (err) {
-    callLiveText.textContent = 'Koneksi suara terputus.';
-    speakCallResponse("Maaf, jaringan suara terputus. Bisa tolong ulangi?");
+    speakCallResponse("Maaf, suara kurang jelas. Bisa diulangi?");
   }
 }
 
@@ -994,57 +1059,57 @@ function speakCallResponse(text) {
   window.speechSynthesis.cancel();
   isAiSpeaking = true;
   callStatus.textContent = 'AI sedang berbicara...';
-  waveformContainer.classList.add('wave-active');
-
-  try { callRecognition.stop(); } catch (_) {}
+  if (waveformContainer) waveformContainer.classList.add('wave-active');
 
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
 
   const utter = new SpeechSynthesisUtterance(clean);
   utter.lang = 'id-ID';
-  utter.rate = parseFloat(speechRateRange?.value) || 1.05;
+  utter.rate = parseFloat(speechRateRange ? speechRateRange.value : '1.05') || 1.05;
 
-  const resumeTurn = () => {
-    if (!isCalling) return;
-    clearTimeout(speechUnlockTimeout);
-    setTimeout(() => {
-      isAiSpeaking = false;
-      accumulatedUserSpeech = '';
-      callStatus.textContent = 'Mendengarkan Anda...';
-      waveformContainer.classList.remove('wave-active');
-      try { callRecognition.start(); } catch (_) {}
-    }, 500);
+  let resumed = false;
+  const finishSpeaking = () => {
+    if (resumed || !isCalling) return;
+    resumed = true;
+    isAiSpeaking = false;
+    lastSpeechTranscript = '';
+    callStatus.textContent = 'Mendengarkan Anda...';
+    if (waveformContainer) waveformContainer.classList.remove('wave-active');
+    startCallMicSafe();
   };
 
-  utter.onend = resumeTurn;
-  utter.onerror = resumeTurn;
+  utter.onend = finishSpeaking;
+  utter.onerror = finishSpeaking;
 
-  // Fallback pengaman: cegah speech deadlock jika browser Android lupa menembakkan event onend
-  clearTimeout(speechUnlockTimeout);
-  const estimatedDuration = Math.max(3000, clean.split(' ').length * 450);
-  speechUnlockTimeout = setTimeout(resumeTurn, estimatedDuration);
+  // Fallback pengaman timeout jika event onend Android macet
+  const fallbackTime = Math.max(3000, clean.split(' ').length * 480);
+  setTimeout(finishSpeaking, fallbackTime);
 
   window.speechSynthesis.speak(utter);
 }
 
 // Ekspor Obrolan
-exportTxtBtn.addEventListener('click', () => {
-  triggerHaptic(15);
-  const session = getCurrentSession();
-  let content = `=== RIWAYAT OBROLAN RZCHAT ===\nJudul: ${session.title}\n\n`;
-  session.messages.forEach(m => {
-    const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    content += `[${m.role.toUpperCase()}]:\n${text}\n\n`;
+if (exportTxtBtn) {
+  exportTxtBtn.addEventListener('click', () => {
+    triggerHaptic(15);
+    const session = getCurrentSession();
+    let content = `=== RIWAYAT OBROLAN RZCHAT ===\nJudul: ${session.title}\n\n`;
+    session.messages.forEach(m => {
+      const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      content += `[${m.role.toUpperCase()}]:\n${text}\n\n`;
+    });
+    downloadFile(content, `${session.title}.txt`, 'text/plain');
   });
-  downloadFile(content, `${session.title}.txt`, 'text/plain');
-});
+}
 
-exportJsonBtn.addEventListener('click', () => {
-  triggerHaptic(15);
-  const session = getCurrentSession();
-  downloadFile(JSON.stringify(session, null, 2), `${session.title}.json`, 'application/json');
-});
+if (exportJsonBtn) {
+  exportJsonBtn.addEventListener('click', () => {
+    triggerHaptic(15);
+    const session = getCurrentSession();
+    downloadFile(JSON.stringify(session, null, 2), `${session.title}.json`, 'application/json');
+  });
+}
 
 function downloadFile(content, fileName, mime) {
   const b = new Blob([content], { type: mime });
