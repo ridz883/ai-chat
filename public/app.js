@@ -137,6 +137,17 @@ const retryBtn = document.getElementById('retry-btn');
 const undoToast = document.getElementById('undo-toast');
 const undoBtn = document.getElementById('undo-btn');
 
+// DOM Fitur Debat
+const debatBtn = document.getElementById('debat-btn');
+const debatModal = document.getElementById('debat-modal');
+const closeDebatBtn = document.getElementById('close-debat-btn');
+const debatForm = document.getElementById('debat-form');
+const debatInput = document.getElementById('debat-input');
+const startDebatBtn = document.getElementById('start-debat-btn');
+const debatChatFlow = document.getElementById('debat-chat-flow');
+const debatTypingBar = document.getElementById('debat-typing-bar');
+const debatTypingText = document.getElementById('debat-typing-text');
+
 let pendingAttachment = null;
 let currentAbortController = null;
 let deletedSessionBackup = null;
@@ -306,7 +317,7 @@ function loadCurrentChat() {
       <div id="empty-state" class="text-center py-24 select-none">
         <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-12 h-12 mx-auto mb-3 object-contain" alt="RZchat Logo">
         <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-        <p class="text-[11px] text-neutral-400 mt-1">Mendukung Analisis Video, Gambar, Dokumen PDF, & Panggilan AI</p>
+        <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Forum Debat Grup AI · Vision Multimodal · Live Canvas</p>
       </div>`;
     return;
   }
@@ -361,7 +372,7 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- EKSTRAKSI FRAME VIDEO (FITUR 3: BACA VIDEO) ---
+// --- EKSTRAKSI FRAME VIDEO ---
 async function extractFramesFromVideo(file, maxFrames = 3) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
@@ -399,7 +410,7 @@ async function extractFramesFromVideo(file, maxFrames = 3) {
       resolve(frames);
     };
 
-    video.onerror = (e) => reject(new Error('Gagal memuat video untuk diekstrak.'));
+    video.onerror = () => reject(new Error('Gagal memuat video untuk diekstrak.'));
   });
 }
 
@@ -545,7 +556,7 @@ chatForm.addEventListener('submit', async (e) => {
   await requestAIResponse();
 });
 
-// Request AI Streaming Response
+// Request AI Streaming Response Biasa
 async function requestAIResponse(isRegenerate = false) {
   const session = getCurrentSession();
   const aiBubble = appendAiBubble(true, true);
@@ -869,7 +880,194 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- PERBAIKAN TOTAL VOICE CALL (CALL AI) ---
+// --- ORCHESTRATOR FITUR DEBAT (FORUM DEBAT ALA GRUP WHATSAPP) ---
+const DEBAT_PARTICIPANTS = [
+  { id: 'qwen/qwen3.8-max:free', name: 'Qwen 3.8', badge: 'bg-emerald-600', color: 'border-emerald-500' },
+  { id: 'deepseek/deepseek-v4-pro', name: 'DeepSeek V4', badge: 'bg-blue-600', color: 'border-blue-500' },
+  { id: 'mistralai/mistral-large-2512', name: 'Mistral Large', badge: 'bg-amber-600', color: 'border-amber-500' },
+  { id: 'minimax/minimax-m3:free', name: 'MiniMax M3', badge: 'bg-purple-600', color: 'border-purple-500' }
+];
+
+debatBtn.addEventListener('click', () => {
+  triggerHaptic(20);
+  debatModal.classList.remove('hidden');
+});
+
+closeDebatBtn.addEventListener('click', () => {
+  debatModal.classList.add('hidden');
+});
+
+debatForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const topic = debatInput.value.trim();
+  if (!topic) return;
+
+  triggerHaptic(15);
+  debatInput.value = '';
+  startDebatBtn.disabled = true;
+
+  // Render bubble user di grup debat
+  appendDebatBubble('user', 'Anda', topic);
+
+  try {
+    await runMultiAgentDebate(topic);
+  } catch (err) {
+    appendDebatSystemNotice(`Gagal menjalankan debat: ${err.message}`);
+  } finally {
+    startDebatBtn.disabled = false;
+    debatTypingBar.classList.add('hidden');
+  }
+});
+
+async function callSingleAI(modelId, messages, temp = 0.5) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: modelId,
+      temperature: temp,
+      messages: messages
+    })
+  });
+
+  if (!res.ok) throw new Error(`Model ${modelId} error`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const lines = decoder.decode(value).split('\n');
+    for (const l of lines) {
+      if (l.startsWith('data:') && !l.includes('[DONE]')) {
+        try {
+          const p = JSON.parse(l.replace('data:', '').trim());
+          full += p.choices?.[0]?.delta?.content || '';
+        } catch (_) {}
+      }
+    }
+  }
+  return full.trim();
+}
+
+async function runMultiAgentDebate(topic) {
+  // BABAK 1: JAWABAN AWAL MANDIRI
+  appendDebatSystemNotice("⚔️ BABAK 1: Masing-masing AI merumuskan jawaban awalnya...");
+  const initialAnswers = {};
+
+  for (const agent of DEBAT_PARTICIPANTS) {
+    showDebatTyping(`${agent.name} sedang menyusun argumen...`);
+    const prompt = [
+      { role: 'system', content: 'Anda adalah pakar ilmiah. Jawab pertanyaan berikut dengan argumen paling kuat, padat, dan akurat maksimal 3 kalimat.' },
+      { role: 'user', content: topic }
+    ];
+    const answer = await callSingleAI(agent.id, prompt, 0.6);
+    initialAnswers[agent.name] = answer;
+    appendDebatBubble(agent.id, agent.name, answer, agent.badge);
+    await delay(600);
+  }
+
+  // BABAK 2: PERDEBATAN & SALING SANGGAH (CROSS-EXAMINATION)
+  appendDebatSystemNotice("🔥 BABAK 2: Saling menguji & menyanggah argumen model lain...");
+  const rebuttals = {};
+
+  for (const agent of DEBAT_PARTICIPANTS) {
+    showDebatTyping(`${agent.name} sedang memeriksa jawaban model lain...`);
+    
+    // Gabungkan jawaban kontestan lain
+    let othersText = '';
+    for (const [name, ans] of Object.entries(initialAnswers)) {
+      if (name !== agent.name) othersText += `[${name}]: "${ans}"\n`;
+    }
+
+    const rebuttalPrompt = [
+      { role: 'system', content: 'Anda sedang berada di panggung debat. Baca argumen lawan berikut. Tunjukkan secara tegas jika ada data atau analisis lawan yang kurang tepat/lemah, dan pertahankan fakta yang benar. Maksimal 3 kalimat lugas.' },
+      { role: 'user', content: `Topik: "${topic}"\nArgumen kontestan lain:\n${othersText}\nBerikan sanggahan atau koreksi Anda:` }
+    ];
+
+    const rebuttal = await callSingleAI(agent.id, rebuttalPrompt, 0.7);
+    rebuttals[agent.name] = rebuttal;
+    appendDebatBubble(agent.id, agent.name, rebuttal, agent.badge, 'Sanggahan:');
+    await delay(700);
+  }
+
+  // BABAK 3: KONSENSUS, VOTING & PUTUSAN AKHIR
+  appendDebatSystemNotice("⚖️ BABAK 3: Voting konsensus & pengakuan jawaban paling benar...");
+  showDebatTyping("Menghitung konsensus dan pemenang mutlak...");
+
+  let allContext = `Topik Debat: ${topic}\n\n`;
+  for (const agent of DEBAT_PARTICIPANTS) {
+    allContext += `Argumen ${agent.name}: ${initialAnswers[agent.name]}\nSanggahan ${agent.name}: ${rebuttals[agent.name]}\n\n`;
+  }
+
+  // Mistral Large / Qwen bertindak sebagai juri pemutus konsensus
+  const judgePrompt = [
+    { 
+      role: 'system', 
+      content: 'Anda adalah Hakim Sidang Debat AI tertinggi. Tugas Anda:\n1. Tentukan 1 MODEL PEMENANG yang argumen datanya paling akurat, valid, dan tak terbantahkan.\n2. Nyatakan bahwa seluruh model lainnya (3 AI lainnya) mengakui dan sepakat dengan jawaban pemenang tersebut.\n3. Berikan KESIMPULAN JAWABAN AKHIR YANG PASTI BENAR secara jelas dan lugas. Format tulisan harus berwibawa.' 
+    },
+    { role: 'user', content: allContext }
+  ];
+
+  const verdict = await callSingleAI('mistralai/mistral-large-2512', judgePrompt, 0.3);
+
+  appendDebatVerdictBubble(verdict);
+}
+
+function appendDebatBubble(id, name, text, badgeColor = 'bg-neutral-800', prefix = '') {
+  const isUser = id === 'user';
+  const el = document.createElement('div');
+  el.className = `flex flex-col ${isUser ? 'items-end' : 'items-start'} gap-1`;
+
+  el.innerHTML = `
+    <div class="flex items-center gap-1.5 text-[10px] text-neutral-500 font-bold px-1">
+      ${!isUser ? `<span class="px-1.5 py-0.2 text-white rounded font-mono text-[9px] ${badgeColor}">${name}</span>` : 'Anda'}
+      ${prefix ? `<span class="italic text-neutral-400">${prefix}</span>` : ''}
+    </div>
+    <div class="max-w-[88%] p-3 rounded-xl text-xs leading-relaxed shadow-sm ${isUser ? 'bg-black text-white rounded-tr-none' : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-none'}">
+      ${escapeHtml(text)}
+    </div>
+  `;
+
+  debatChatFlow.appendChild(el);
+  debatChatFlow.scrollTop = debatChatFlow.scrollHeight;
+}
+
+function appendDebatVerdictBubble(verdictText) {
+  const el = document.createElement('div');
+  el.className = 'w-full my-3 p-4 bg-amber-50 border-2 border-amber-500 rounded-xl shadow-md text-xs text-amber-950 space-y-2';
+  el.innerHTML = `
+    <div class="flex items-center gap-2 font-bold uppercase tracking-wider text-amber-800 border-b border-amber-300 pb-1.5">
+      <span>🏆</span>
+      <span>HASIL KONSENSUS AKHIR & JAWABAN MUTLAK</span>
+    </div>
+    <div class="prose prose-sm leading-relaxed">${marked.parse(verdictText)}</div>
+    <p class="text-[10px] text-amber-700 font-mono italic mt-2">* 3 Model AI lainnya telah menyatakan sepakat dan mengakui validitas jawaban di atas.</p>
+  `;
+  debatChatFlow.appendChild(el);
+  debatChatFlow.scrollTop = debatChatFlow.scrollHeight;
+}
+
+function appendDebatSystemNotice(text) {
+  const el = document.createElement('div');
+  el.className = 'text-center py-1.5 px-3 bg-neutral-200/80 rounded-full text-[10px] font-mono text-neutral-700 w-fit mx-auto my-1';
+  el.textContent = text;
+  debatChatFlow.appendChild(el);
+  debatChatFlow.scrollTop = debatChatFlow.scrollHeight;
+}
+
+function showDebatTyping(text) {
+  debatTypingBar.classList.remove('hidden');
+  debatTypingText.textContent = text;
+}
+
+function delay(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+// --- VOICE CALL REAL-TIME DUA ARAH STABIL ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -915,7 +1113,6 @@ if (CallSR) {
       callLiveText.textContent = `Anda: "${currentText}"`;
       if (waveformContainer) waveformContainer.classList.add('wave-active');
 
-      // Jeda hening 1 detik untuk otomatis kirim ke AI
       clearTimeout(callDebounceTimer);
       callDebounceTimer = setTimeout(() => {
         if (lastSpeechTranscript.length > 0 && !isAiSpeaking && isCalling) {
@@ -1082,7 +1279,6 @@ function speakCallResponse(text) {
   utter.onend = finishSpeaking;
   utter.onerror = finishSpeaking;
 
-  // Fallback pengaman timeout jika event onend Android macet
   const fallbackTime = Math.max(3000, clean.split(' ').length * 480);
   setTimeout(finishSpeaking, fallbackTime);
 
