@@ -1,13 +1,13 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// --- HAPTIC FEEDBACK (GETAR HALUS HP ANDROID) ---
+// --- HAPTIC FEEDBACK ---
 function triggerHaptic(duration = 15) {
   if ('vibrate' in navigator) {
     try { navigator.vibrate(duration); } catch (_) {}
   }
 }
 
-// --- PWA SERVICE WORKER REGISTRATION ---
+// --- PWA SERVICE WORKER ---
 let deferredPrompt = null;
 const installBtn = document.getElementById('install-btn');
 
@@ -98,6 +98,8 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const micBtn = document.getElementById('mic-btn');
+const btnPhoto = document.getElementById('btn-photo');
+const directPhotoInput = document.getElementById('direct-photo-input');
 const fileProcessingBar = document.getElementById('file-processing-bar');
 const processingStatus = document.getElementById('processing-status');
 const attachmentChip = document.getElementById('attachment-chip');
@@ -121,7 +123,6 @@ const scrollDot = document.getElementById('scroll-dot');
 const retryBar = document.getElementById('retry-bar');
 const retryBtn = document.getElementById('retry-btn');
 const undoToast = document.getElementById('undo-toast');
-const undoToastText = document.getElementById('undo-toast-text');
 const undoBtn = document.getElementById('undo-btn');
 
 let pendingAttachment = null;
@@ -131,7 +132,7 @@ let undoTimeout = null;
 
 marked.setOptions({ breaks: true, gfm: true });
 
-// Mobile Viewport Keyboard Fix
+// Mobile Viewport Fix
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => {
     document.body.style.height = `${window.visualViewport.height}px`;
@@ -139,11 +140,11 @@ if (window.visualViewport) {
   });
 }
 
-// --- SMART AUTO-SCROLL & FLOATING DOWN BUTTON ---
+// --- SMART SCROLL & FLOATING DOWN BUTTON ---
 let userHasScrolledUp = false;
 
 chatBox.addEventListener('scroll', () => {
-  const threshold = 100;
+  const threshold = 80;
   const isNearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= threshold;
   
   if (!isNearBottom) {
@@ -176,10 +177,9 @@ userInput.addEventListener('keydown', (e) => {
   }
 });
 
-// --- RENDER DRAWER SESSIONS (DENGAN PIN / SEMATKAN & UNDO DELETE) ---
+// --- RENDER DRAWER SESSIONS ---
 function renderSessionList() {
   sessionList.innerHTML = '';
-  // Urutkan: Pinned di paling atas, lalu sesuai tanggal update
   const sortedSessions = [...sessions].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
@@ -188,19 +188,18 @@ function renderSessionList() {
 
   sortedSessions.forEach(s => {
     const item = document.createElement('div');
-    item.className = `p-2 border border-black cursor-pointer flex justify-between items-center transition relative ${s.id === currentSessionId ? 'bg-black text-white' : 'hover:bg-neutral-100'}`;
+    item.className = `p-2 border border-neutral-200 rounded cursor-pointer flex justify-between items-center transition relative ${s.id === currentSessionId ? 'bg-black text-white' : 'hover:bg-neutral-50'}`;
     item.innerHTML = `
       <div class="flex items-center gap-1.5 truncate flex-1">
-        ${s.pinned ? '<span class="text-xs">📌</span>' : ''}
+        ${s.pinned ? '<span class="text-[10px]">📌</span>' : ''}
         <span class="truncate font-mono">${escapeHtml(s.title)}</span>
       </div>
       <div class="flex items-center gap-1">
-        <button class="px-1 text-[11px] hover:text-amber-500 pin-session-btn" data-id="${s.id}" title="${s.pinned ? 'Lepas Pin' : 'Sematkan'}">${s.pinned ? 'Unpin' : 'Pin'}</button>
-        <button class="font-bold px-1 hover:text-red-500 delete-session-btn" data-id="${s.id}">✕</button>
+        <button class="px-1 text-[10px] text-neutral-400 hover:text-black pin-session-btn" data-id="${s.id}">${s.pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="font-bold px-1 text-neutral-400 hover:text-red-600 delete-session-btn" data-id="${s.id}">✕</button>
       </div>
     `;
 
-    // Long press / click-hold untuk Pin di Mobile
     let pressTimer;
     item.addEventListener('touchstart', () => {
       pressTimer = setTimeout(() => {
@@ -222,7 +221,6 @@ function renderSessionList() {
     sessionList.appendChild(item);
   });
 
-  // Listener Pin
   document.querySelectorAll('.pin-session-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -231,7 +229,6 @@ function renderSessionList() {
     });
   });
 
-  // Listener Delete dengan Batas Balik / Undo 5 Detik
   document.querySelectorAll('.delete-session-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -249,7 +246,6 @@ function renderSessionList() {
       saveSessions();
       loadCurrentChat();
 
-      // Tampilkan toast undo
       clearTimeout(undoTimeout);
       undoToast.classList.remove('hidden');
       undoTimeout = setTimeout(() => {
@@ -281,7 +277,6 @@ undoBtn.addEventListener('click', () => {
   }
 });
 
-// --- KALKULATOR TOKEN & DURASI BACA ---
 function calculateReadingStats(text) {
   const clean = text.replace(/[*#`_\[\]()]/g, '').trim();
   const words = clean.length > 0 ? clean.split(/\s+/).length : 0;
@@ -296,9 +291,10 @@ function loadCurrentChat() {
 
   if (!session || session.messages.length === 0) {
     chatBox.innerHTML = `
-      <div id="empty-state" class="text-center py-20 select-none">
-        <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-        <p class="text-xs text-neutral-500 mt-1">Mendukung Canvas Live Preview, Voice Call Waveform, Vision & Dokumen.</p>
+      <div id="empty-state" class="text-center py-24 select-none">
+        <div class="w-12 h-12 mx-auto mb-3 border border-black rounded-full flex items-center justify-center font-mono font-bold text-sm">RZ</div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
+        <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Voice Call · Vision Multimodal · Live Canvas</p>
       </div>`;
     return;
   }
@@ -316,7 +312,7 @@ function loadCurrentChat() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- VOICE NOTES / STT (REGULER CHAT) ---
+// --- VOICE NOTES INPUT BIASA ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
@@ -353,101 +349,36 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- BOTTOM SHEET ATTACHMENT MENU ---
-const attachmentMenuBtn = document.getElementById('attachment-menu-btn');
-const bottomSheetOverlay = document.getElementById('bottom-sheet-overlay');
-const closeBottomSheet = document.getElementById('close-bottom-sheet');
-const fileInputGallery = document.getElementById('file-input-gallery');
-const fileInputCamera = document.getElementById('file-input-camera');
-const fileInputDocs = document.getElementById('file-input-docs');
-
-attachmentMenuBtn.addEventListener('click', () => {
+// --- MEMILIH FOTO LANGSUNG BUKA GALERI (POIN 3) ---
+btnPhoto.addEventListener('click', () => {
   triggerHaptic(15);
-  bottomSheetOverlay.classList.remove('hidden');
+  directPhotoInput.click();
 });
 
-closeBottomSheet.addEventListener('click', () => bottomSheetOverlay.classList.add('hidden'));
-bottomSheetOverlay.addEventListener('click', (e) => {
-  if (e.target === bottomSheetOverlay) bottomSheetOverlay.classList.add('hidden');
-});
-
-document.getElementById('btn-opt-camera').addEventListener('click', () => {
-  bottomSheetOverlay.classList.add('hidden');
-  fileInputCamera.click();
-});
-
-document.getElementById('btn-opt-gallery').addEventListener('click', () => {
-  bottomSheetOverlay.classList.add('hidden');
-  fileInputGallery.click();
-});
-
-document.getElementById('btn-opt-doc').addEventListener('click', () => {
-  bottomSheetOverlay.classList.add('hidden');
-  fileInputDocs.click();
-});
-
-document.getElementById('btn-opt-genimg').addEventListener('click', () => {
-  bottomSheetOverlay.classList.add('hidden');
-  userInput.value = 'Buat gambar ilustrasi tentang: ';
-  userInput.focus();
-  triggerHaptic(15);
-});
-
-[fileInputGallery, fileInputCamera].forEach(inp => {
-  inp.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    processAttachmentFile(file, 'image');
-  });
-});
-
-fileInputDocs.addEventListener('change', async (e) => {
+directPhotoInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  processAttachmentFile(file, file.type === 'application/pdf' ? 'pdf' : 'text');
-});
 
-async function processAttachmentFile(file, type) {
   fileProcessingBar.classList.remove('hidden');
   sendBtn.disabled = true;
 
   try {
-    if (type === 'image') {
-      processingStatus.textContent = 'Memproses visual gambar...';
-      const base64Data = await fileToBase64(file);
-      pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
-      thumbPreview.style.backgroundImage = `url(${base64Data})`;
-      thumbPreview.classList.remove('hidden');
-    } else if (type === 'pdf') {
-      processingStatus.textContent = 'Mengekstrak PDF...';
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const c = await page.getTextContent();
-        text += c.items.map(it => it.str).join(' ') + '\n';
-      }
-      pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
-      thumbPreview.classList.add('hidden');
-    } else {
-      const text = await file.text();
-      pendingAttachment = { type: 'text', name: file.name, extractedText: text };
-      thumbPreview.classList.add('hidden');
-    }
+    processingStatus.textContent = 'Memuat gambar...';
+    const base64Data = await fileToBase64(file);
+    pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
+    thumbPreview.style.backgroundImage = `url(${base64Data})`;
+    thumbPreview.classList.remove('hidden');
     attachmentName.textContent = file.name;
     attachmentChip.classList.remove('hidden');
     triggerHaptic(20);
   } catch (err) {
-    alert('Gagal memproses file: ' + err.message);
+    alert('Gagal memuat gambar: ' + err.message);
   } finally {
     fileProcessingBar.classList.add('hidden');
-    fileInputGallery.value = '';
-    fileInputCamera.value = '';
-    fileInputDocs.value = '';
+    directPhotoInput.value = '';
     sendBtn.disabled = false;
   }
-}
+});
 
 function fileToBase64(file) {
   return new Promise((res, rej) => {
@@ -464,7 +395,7 @@ removeAttachmentBtn.addEventListener('click', () => {
   thumbPreview.classList.add('hidden');
 });
 
-// --- SUBMIT PESAN CHAT & DYNAMIC TITLE GENERATION ---
+// --- SUBMIT PESAN CHAT ---
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
@@ -478,22 +409,14 @@ chatForm.addEventListener('submit', async (e) => {
   let displayHtml = '';
 
   if (pendingAttachment) {
-    if (pendingAttachment.type === 'image') {
-      displayHtml = `
-        <div class="mb-2"><img src="${pendingAttachment.base64Url}" class="max-h-60 rounded border border-white/20 object-contain"></div>
-        <div>${escapeHtml(text || 'Analisis gambar ini')}</div>
-      `;
-      aiContentPayload = [
-        { type: "text", text: text || "Jelaskan dan analisis isi dari gambar ini secara detail." },
-        { type: "image_url", image_url: { url: pendingAttachment.base64Url } }
-      ];
-    } else {
-      displayHtml = `
-        <div class="text-xs font-mono bg-white/10 p-1 mb-1 border border-white/20">📄 ${escapeHtml(pendingAttachment.name)}</div>
-        <div>${escapeHtml(text)}</div>
-      `;
-      aiContentPayload = `${text}\n\n[Isi Dokumen ${pendingAttachment.name}]:\n${pendingAttachment.extractedText}`;
-    }
+    displayHtml = `
+      <div class="mb-2"><img src="${pendingAttachment.base64Url}" class="max-h-60 rounded border border-white/20 object-contain"></div>
+      <div>${escapeHtml(text || 'Analisis gambar ini')}</div>
+    `;
+    aiContentPayload = [
+      { type: "text", text: text || "Jelaskan dan analisis isi gambar ini secara detail." },
+      { type: "image_url", image_url: { url: pendingAttachment.base64Url } }
+    ];
   } else {
     displayHtml = escapeHtml(text);
     aiContentPayload = text;
@@ -517,7 +440,7 @@ chatForm.addEventListener('submit', async (e) => {
   await requestAIResponse();
 });
 
-// Eksekusi Streaming Respon dengan Retry & Realtime Typing
+// Request AI Streaming Response
 async function requestAIResponse(isRegenerate = false) {
   const session = getCurrentSession();
   const aiBubble = appendAiBubble(true, true);
@@ -574,8 +497,6 @@ async function requestAIResponse(isRegenerate = false) {
           if (chunk) {
             fullRes += chunk;
             updateAiTypingContent(aiBubble, fullRes);
-            
-            // Cek status scrolling: jika user scroll ke atas, jangan paksa scroll
             if (!userHasScrolledUp) {
               chatBox.scrollTop = chatBox.scrollHeight;
             } else {
@@ -599,7 +520,6 @@ async function requestAIResponse(isRegenerate = false) {
     const aiMsgIndex = session.messages.length - 1;
     addBubbleActionButtons(aiBubble, fullRes, aiMsgIndex);
 
-    // Dynamic Title Generation Otomatis jika obrolan masih baru
     if (session.messages.length === 2 && session.title === 'Obrolan Baru') {
       generateDynamicTitle(session);
     }
@@ -611,7 +531,6 @@ async function requestAIResponse(isRegenerate = false) {
       saveSessions();
     } else {
       aiBubble.innerHTML = `<span class="text-red-600 font-mono">[Error: ${err.message}]</span>`;
-      // Tampilkan Auto-Retry bar
       retryBar.classList.remove('hidden');
     }
   } finally {
@@ -621,7 +540,6 @@ async function requestAIResponse(isRegenerate = false) {
   }
 }
 
-// Auto-Retry Handler
 retryBtn.addEventListener('click', async () => {
   triggerHaptic(15);
   retryBar.classList.add('hidden');
@@ -638,10 +556,10 @@ stopBtn.addEventListener('click', () => {
   }
 });
 
-// Fitur Dynamic Title Otomatis (3-4 Kata)
+// Dynamic Title Otomatis
 async function generateDynamicTitle(session) {
   try {
-    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum topik pertanyaan ini: " + session.messages[0].content;
+    const prompt = "Buatkan judul sangat singkat 3 sampai 4 kata saja (tanpa tanda kutip atau titik) yang merangkum pertanyaan ini: " + (typeof session.messages[0].content === 'string' ? session.messages[0].content : 'Gambar');
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -669,13 +587,13 @@ async function generateDynamicTitle(session) {
   } catch (_) {}
 }
 
-// Render Bubble Chat
+// Render Bubble UI
 function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   const el = document.createElement('div');
   el.className = 'flex flex-col items-end gap-1';
   el.innerHTML = `
-    <div class="max-w-[85%] bg-black text-white p-3 border border-black text-sm">${htmlContent}</div>
-    ${index !== null ? `<button class="text-[10px] uppercase font-bold text-neutral-500 hover:text-black edit-msg-btn" data-index="${index}">Edit ✎</button>` : ''}
+    <div class="max-w-[85%] bg-black text-white p-3 rounded-lg text-sm">${htmlContent}</div>
+    ${index !== null ? `<button class="text-[10px] uppercase font-bold text-neutral-400 hover:text-black edit-msg-btn" data-index="${index}">Edit ✎</button>` : ''}
   `;
 
   if (index !== null) {
@@ -686,18 +604,19 @@ function appendUserBubble(htmlContent, autoScroll = true, index = null) {
   if (autoScroll) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+// Poin 4: Menggunakan Link Video Loading Baru
 function appendAiBubble(autoScroll = true, showLoader = false) {
   const el = document.createElement('div');
   el.className = 'flex justify-start';
   el.innerHTML = `
-    <div class="max-w-[90%] bg-white text-black p-3.5 border border-black text-sm prose shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+    <div class="max-w-[90%] bg-white text-black p-3.5 border border-neutral-200 rounded-lg text-sm prose shadow-sm">
       ${showLoader ? `
         <div class="flex items-center gap-2 mb-2 loader-wrapper">
-          <video src="https://videotourl.com/videos/1788627788425-bbdd651d-20d3-4a0a-bd63-a27d0ca809cb.mp4" autoplay loop muted playsinline class="loader-video"></video>
-          <span class="text-xs font-mono text-neutral-500 animate-pulse">RZchat sedang mengetik...</span>
+          <video src="https://videotourl.com/videos/1788670557376-a9c3e8e5-7da0-4f74-abfe-6e415b0f227d.mp4" autoplay loop muted playsinline class="loader-video"></video>
+          <span class="text-xs font-mono text-neutral-400 animate-pulse">RZchat sedang mengetik...</span>
         </div>
       ` : ''}
-      <div class="ai-content-body"><span class="inline-block w-2 h-4 bg-black animate-pulse"></span></div>
+      <div class="ai-content-body"><span class="inline-block w-1.5 h-3.5 bg-black animate-pulse"></span></div>
     </div>
   `;
   chatBox.appendChild(el);
@@ -725,7 +644,7 @@ function finalizeAiBubble(bubbleEl, text) {
   }
 }
 
-// --- FITUR CANVAS (LIVE CODE PLAYGROUND) ---
+// Live Canvas Toolbar
 const canvasModal = document.getElementById('canvas-modal');
 const closeCanvasBtn = document.getElementById('close-canvas-btn');
 const canvasCodeInput = document.getElementById('canvas-code-input');
@@ -739,14 +658,13 @@ function injectCanvasActionButtons(container) {
     const codeEl = pre.querySelector('code');
     const codeText = codeEl ? codeEl.innerText : pre.innerText;
 
-    // Jika kode mengandung sintaks HTML / JS, berikan tombol Live Canvas
     const isHtmlOrJs = codeText.includes('<html') || codeText.includes('<!DOCTYPE') || codeText.includes('<div') || codeText.includes('<button') || codeText.includes('<script');
 
     const toolbar = document.createElement('div');
     toolbar.className = 'absolute top-2 right-2 flex gap-1 z-10 not-prose';
     toolbar.innerHTML = `
-      ${isHtmlOrJs ? '<button class="px-2 py-0.5 bg-white text-black text-[10px] uppercase font-bold border border-black hover:bg-black hover:text-white canvas-run-btn">Buka Canvas 🌐</button>' : ''}
-      <button class="px-2 py-0.5 bg-neutral-800 text-white text-[10px] uppercase font-bold hover:bg-neutral-700 copy-code-btn">Salin</button>
+      ${isHtmlOrJs ? '<button class="px-2 py-0.5 bg-white text-black text-[10px] uppercase font-bold border border-neutral-300 rounded hover:bg-black hover:text-white canvas-run-btn">Canvas 🌐</button>' : ''}
+      <button class="px-2 py-0.5 bg-neutral-800 text-white text-[10px] uppercase font-bold rounded hover:bg-neutral-700 copy-code-btn">Salin</button>
     `;
 
     toolbar.querySelector('.copy-code-btn').addEventListener('click', () => {
@@ -785,7 +703,7 @@ closeCanvasBtn.addEventListener('click', () => {
   canvasModal.classList.add('hidden');
 });
 
-// Edit & Action Buttons Bubble
+// Edit & Actions Bubble
 function handleEditMessage(index) {
   triggerHaptic(15);
   const session = getCurrentSession();
@@ -804,13 +722,13 @@ function handleEditMessage(index) {
 function addBubbleActionButtons(bubbleEl, text, index) {
   const stats = calculateReadingStats(text);
   const actions = document.createElement('div');
-  actions.className = 'mt-3 pt-2 border-t border-black/20 flex flex-wrap items-center justify-between gap-2 text-xs not-prose';
+  actions.className = 'mt-3 pt-2 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs not-prose';
   actions.innerHTML = `
-    <span class="text-[10px] font-mono text-neutral-500">${stats}</span>
-    <div class="flex gap-1.5">
-      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] copy-btn">Salin</button>
-      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] regen-btn">Regenerate 🔁</button>
-      <button class="px-2 py-0.5 border border-black hover:bg-black hover:text-white uppercase font-bold text-[10px] speak-btn">Bicara 🔊</button>
+    <span class="text-[10px] font-mono text-neutral-400">${stats}</span>
+    <div class="flex gap-1">
+      <button class="px-2 py-0.5 border border-neutral-300 rounded hover:bg-neutral-100 uppercase font-bold text-[10px] copy-btn">Salin</button>
+      <button class="px-2 py-0.5 border border-neutral-300 rounded hover:bg-neutral-100 uppercase font-bold text-[10px] regen-btn">Regenerate 🔁</button>
+      <button class="px-2 py-0.5 border border-neutral-300 rounded hover:bg-neutral-100 uppercase font-bold text-[10px] speak-btn">Bicara 🔊</button>
     </div>
   `;
 
@@ -843,7 +761,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- VOICE CALL DENGAN VISUALIZER WAVEFORM REALTIME & AUDIO INTERRUPT ---
+// --- VOICE CALL REAL-TIME OPTIMAL (POIN 1: PERBAIKAN TOTAL CALL AI) ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -861,24 +779,23 @@ let isAiSpeaking = false;
 let silenceTimer = null;
 let accumulatedUserSpeech = '';
 
-// Web Audio API State
 let audioContext = null;
 let analyser = null;
 let micSourceNode = null;
 let micStream = null;
 let animFrameId = null;
 
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const CallSR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-if (SR) {
-  callRecognition = new SR();
+if (CallSR) {
+  callRecognition = new CallSR();
   callRecognition.lang = 'id-ID';
   callRecognition.continuous = true;
   callRecognition.interimResults = true;
 
   callRecognition.onstart = () => {
     if (isCalling && !isAiSpeaking) {
-      callStatus.textContent = 'Mendengarkan Anda...';
+      callStatus.textContent = 'Mendengarkan...';
     }
   };
 
@@ -895,11 +812,11 @@ if (SR) {
 
     const currentSpoken = (final || interim).trim();
 
-    // FITUR 4: AUDIO INTERRUPT (Jika AI sedang bicara dan Anda menyela bicara)
+    // Audio Interrupt: Pengguna memotong omongan AI
     if (isAiSpeaking && currentSpoken.length > 2) {
       window.speechSynthesis.cancel();
       isAiSpeaking = false;
-      callStatus.textContent = 'Mendengarkan Anda...';
+      callStatus.textContent = 'Mendengarkan...';
     }
 
     if (currentSpoken.length > 1 && !isAiSpeaking) {
@@ -907,6 +824,7 @@ if (SR) {
       accumulatedUserSpeech = currentSpoken;
 
       clearTimeout(silenceTimer);
+      // Tunggu hening 1.1 detik untuk langsung proses ke AI
       silenceTimer = setTimeout(() => {
         if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
           const textToSend = accumulatedUserSpeech.trim();
@@ -916,7 +834,7 @@ if (SR) {
           callStatus.textContent = 'AI sedang berpikir...';
           sendVoiceToAI(textToSend);
         }
-      }, 1200);
+      }, 1100);
     }
   };
 
@@ -924,7 +842,7 @@ if (SR) {
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
       setTimeout(() => {
         try { callRecognition.start(); } catch (_) {}
-      }, 400);
+      }, 350);
     }
   };
 
@@ -932,7 +850,7 @@ if (SR) {
     if (isCalling && !isAiSpeaking) {
       setTimeout(() => {
         try { callRecognition.start(); } catch (_) {}
-      }, 400);
+      }, 350);
     }
   };
 }
@@ -940,7 +858,7 @@ if (SR) {
 callBtn.addEventListener('click', async () => {
   triggerHaptic(20);
   if (!callRecognition) {
-    alert('Browser tidak mendukung Speech Recognition untuk mode telepon.');
+    alert('Browser Anda tidak mendukung Speech Recognition untuk telepon.');
     return;
   }
   startCall();
@@ -954,7 +872,6 @@ async function startCall() {
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
 
-  // Inisialisasi Web Audio Analyser untuk Live Waveform
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -964,7 +881,7 @@ async function startCall() {
     micSourceNode.connect(analyser);
     drawLiveWaveform();
   } catch (err) {
-    console.warn('Web Audio init gagal:', err);
+    console.warn('Waveform AudioContext Gagal:', err);
   }
 
   callInterval = setInterval(() => {
@@ -977,7 +894,6 @@ async function startCall() {
   speakCallResponse("Halo! Saya RZchat. Ada yang bisa saya bantu?");
 }
 
-// Gambar Gelombang Suara (Waveform) Realtime
 function drawLiveWaveform() {
   if (!isCalling) return;
 
@@ -1019,7 +935,7 @@ function endCall() {
 
 async function sendVoiceToAI(text) {
   const session = getCurrentSession();
-  const callPrompt = `[MODE TELEPON: Jawab sangat singkat, padat, dan santai maksimal 2 kalimat tanpa markdown, tanpa bullet points, dan tanpa emoji]: ${text}`;
+  const callPrompt = `[MODE TELEPON AKTIF: Jawab langsung, sangat ringkas maksimal 2 kalimat santai tanpa markdown, bullet points, atau simbol]: ${text}`;
   
   session.messages.push({ role: 'user', content: callPrompt, displayHtml: escapeHtml(text) });
   saveSessions();
@@ -1061,7 +977,7 @@ async function sendVoiceToAI(text) {
     speakCallResponse(fullRes);
 
   } catch (err) {
-    callLiveText.textContent = 'Koneksi terputus.';
+    callLiveText.textContent = 'Koneksi suara terganggu.';
     speakCallResponse("Maaf, suara terputus. Bisa tolong ulangi?");
   }
 }
@@ -1071,7 +987,7 @@ function speakCallResponse(text) {
 
   window.speechSynthesis.cancel();
   isAiSpeaking = true;
-  callStatus.textContent = 'AI sedang berbicara... (Sela untuk interupsi)';
+  callStatus.textContent = 'AI sedang berbicara...';
 
   const clean = text.replace(/[*#_`>\[\]]/g, '').trim();
   callLiveText.textContent = `AI: "${clean}"`;
@@ -1085,9 +1001,9 @@ function speakCallResponse(text) {
     setTimeout(() => {
       isAiSpeaking = false;
       accumulatedUserSpeech = '';
-      callStatus.textContent = 'Mendengarkan Anda...';
+      callStatus.textContent = 'Mendengarkan...';
       try { callRecognition.start(); } catch (_) {}
-    }, 600);
+    }, 450);
   };
 
   utter.onend = resumeListening;
@@ -1096,7 +1012,7 @@ function speakCallResponse(text) {
   window.speechSynthesis.speak(utter);
 }
 
-// Ekspor Obrolan Sesi
+// Ekspor Obrolan
 exportTxtBtn.addEventListener('click', () => {
   triggerHaptic(15);
   const session = getCurrentSession();
