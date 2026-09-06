@@ -98,8 +98,15 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const micBtn = document.getElementById('mic-btn');
-const btnPhoto = document.getElementById('btn-photo');
-const directPhotoInput = document.getElementById('direct-photo-input');
+
+// Poin 3 & 4: Tombol & Input File Terpisah
+const btnGallery = document.getElementById('btn-gallery');
+const btnCamera = document.getElementById('btn-camera');
+const btnDoc = document.getElementById('btn-doc');
+const inputGallery = document.getElementById('input-gallery');
+const inputCamera = document.getElementById('input-camera');
+const inputDoc = document.getElementById('input-doc');
+
 const fileProcessingBar = document.getElementById('file-processing-bar');
 const processingStatus = document.getElementById('processing-status');
 const attachmentChip = document.getElementById('attachment-chip');
@@ -292,7 +299,7 @@ function loadCurrentChat() {
   if (!session || session.messages.length === 0) {
     chatBox.innerHTML = `
       <div id="empty-state" class="text-center py-24 select-none">
-        <div class="w-12 h-12 mx-auto mb-3 border border-black rounded-full flex items-center justify-center font-mono font-bold text-sm">RZ</div>
+        <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-12 h-12 mx-auto mb-3 object-contain" alt="RZchat Logo">
         <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
         <p class="text-[11px] text-neutral-400 mt-1">Multi-Model AI · Voice Call · Vision Multimodal · Live Canvas</p>
       </div>`;
@@ -312,7 +319,7 @@ function loadCurrentChat() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// --- VOICE NOTES INPUT BIASA ---
+// --- VOICE NOTES INPUT BIASA (CHAT) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
@@ -349,13 +356,50 @@ function stopMic() {
   micBtn.classList.remove('recording-active');
 }
 
-// --- MEMILIH FOTO LANGSUNG BUKA GALERI (POIN 3) ---
-btnPhoto.addEventListener('click', () => {
+// --- POIN 3 & 4: MEMILIH FOTO, KAMERA, DOKUMEN ---
+btnGallery.addEventListener('click', () => {
   triggerHaptic(15);
-  directPhotoInput.click();
+  inputGallery.click();
 });
 
-directPhotoInput.addEventListener('change', async (e) => {
+btnCamera.addEventListener('click', () => {
+  triggerHaptic(15);
+  inputCamera.click();
+});
+
+btnDoc.addEventListener('click', () => {
+  triggerHaptic(15);
+  inputDoc.click();
+});
+
+[inputGallery, inputCamera].forEach(inp => {
+  inp.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    fileProcessingBar.classList.remove('hidden');
+    sendBtn.disabled = true;
+
+    try {
+      processingStatus.textContent = 'Memuat gambar...';
+      const base64Data = await fileToBase64(file);
+      pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
+      thumbPreview.style.backgroundImage = `url(${base64Data})`;
+      thumbPreview.classList.remove('hidden');
+      attachmentName.textContent = file.name;
+      attachmentChip.classList.remove('hidden');
+      triggerHaptic(20);
+    } catch (err) {
+      alert('Gagal memuat gambar: ' + err.message);
+    } finally {
+      fileProcessingBar.classList.add('hidden');
+      inp.value = '';
+      sendBtn.disabled = false;
+    }
+  });
+});
+
+inputDoc.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
@@ -363,19 +407,31 @@ directPhotoInput.addEventListener('change', async (e) => {
   sendBtn.disabled = true;
 
   try {
-    processingStatus.textContent = 'Memuat gambar...';
-    const base64Data = await fileToBase64(file);
-    pendingAttachment = { type: 'image', name: file.name, base64Url: base64Data };
-    thumbPreview.style.backgroundImage = `url(${base64Data})`;
-    thumbPreview.classList.remove('hidden');
+    if (file.type === 'application/pdf') {
+      processingStatus.textContent = 'Mengekstrak PDF...';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const c = await page.getTextContent();
+        text += c.items.map(it => it.str).join(' ') + '\n';
+      }
+      pendingAttachment = { type: 'pdf', name: file.name, extractedText: text };
+    } else {
+      processingStatus.textContent = 'Membaca dokumen...';
+      const text = await file.text();
+      pendingAttachment = { type: 'text', name: file.name, extractedText: text };
+    }
+    thumbPreview.classList.add('hidden');
     attachmentName.textContent = file.name;
     attachmentChip.classList.remove('hidden');
     triggerHaptic(20);
   } catch (err) {
-    alert('Gagal memuat gambar: ' + err.message);
+    alert('Gagal membaca berkas: ' + err.message);
   } finally {
     fileProcessingBar.classList.add('hidden');
-    directPhotoInput.value = '';
+    inputDoc.value = '';
     sendBtn.disabled = false;
   }
 });
@@ -409,14 +465,22 @@ chatForm.addEventListener('submit', async (e) => {
   let displayHtml = '';
 
   if (pendingAttachment) {
-    displayHtml = `
-      <div class="mb-2"><img src="${pendingAttachment.base64Url}" class="max-h-60 rounded border border-white/20 object-contain"></div>
-      <div>${escapeHtml(text || 'Analisis gambar ini')}</div>
-    `;
-    aiContentPayload = [
-      { type: "text", text: text || "Jelaskan dan analisis isi gambar ini secara detail." },
-      { type: "image_url", image_url: { url: pendingAttachment.base64Url } }
-    ];
+    if (pendingAttachment.type === 'image') {
+      displayHtml = `
+        <div class="mb-2"><img src="${pendingAttachment.base64Url}" class="max-h-60 rounded border border-white/20 object-contain"></div>
+        <div>${escapeHtml(text || 'Analisis gambar ini')}</div>
+      `;
+      aiContentPayload = [
+        { type: "text", text: text || "Jelaskan dan analisis isi gambar ini secara detail." },
+        { type: "image_url", image_url: { url: pendingAttachment.base64Url } }
+      ];
+    } else {
+      displayHtml = `
+        <div class="text-xs font-mono bg-white/10 p-1 mb-1 border border-white/20">📄 ${escapeHtml(pendingAttachment.name)}</div>
+        <div>${escapeHtml(text)}</div>
+      `;
+      aiContentPayload = `${text}\n\n[Isi Dokumen ${pendingAttachment.name}]:\n${pendingAttachment.extractedText}`;
+    }
   } else {
     displayHtml = escapeHtml(text);
     aiContentPayload = text;
@@ -761,7 +825,7 @@ function addBubbleActionButtons(bubbleEl, text, index) {
   bubbleEl.appendChild(actions);
 }
 
-// --- VOICE CALL REAL-TIME OPTIMAL (POIN 1: PERBAIKAN TOTAL CALL AI) ---
+// --- POIN 1: PERBAIKAN TOTAL CALL AI (SPEECH-TO-SPEECH BERURUTAN) ---
 const callBtn = document.getElementById('call-btn');
 const callOverlay = document.getElementById('call-overlay');
 const hangupBtn = document.getElementById('hangup-btn');
@@ -776,8 +840,6 @@ let callInterval = null;
 let callSeconds = 0;
 let callRecognition = null;
 let isAiSpeaking = false;
-let silenceTimer = null;
-let accumulatedUserSpeech = '';
 
 let audioContext = null;
 let analyser = null;
@@ -790,7 +852,7 @@ const CallSR = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (CallSR) {
   callRecognition = new CallSR();
   callRecognition.lang = 'id-ID';
-  callRecognition.continuous = true;
+  callRecognition.continuous = false; // Mode giliran: dengarkan 1 kalimat penuh agar tidak timeout/stuck
   callRecognition.interimResults = true;
 
   callRecognition.onstart = () => {
@@ -800,7 +862,7 @@ if (CallSR) {
   };
 
   callRecognition.onresult = (e) => {
-    if (!isCalling) return;
+    if (!isCalling || isAiSpeaking) return;
 
     let interim = '';
     let final = '';
@@ -811,48 +873,43 @@ if (CallSR) {
     }
 
     const currentSpoken = (final || interim).trim();
-
-    // Audio Interrupt: Pengguna memotong omongan AI
-    if (isAiSpeaking && currentSpoken.length > 2) {
-      window.speechSynthesis.cancel();
-      isAiSpeaking = false;
-      callStatus.textContent = 'Mendengarkan...';
+    if (currentSpoken.length > 0) {
+      callLiveText.textContent = `Anda: "${currentSpoken}"`;
     }
 
-    if (currentSpoken.length > 1 && !isAiSpeaking) {
-      callLiveText.textContent = `Anda: "${currentSpoken}"`;
-      accumulatedUserSpeech = currentSpoken;
-
-      clearTimeout(silenceTimer);
-      // Tunggu hening 1.1 detik untuk langsung proses ke AI
-      silenceTimer = setTimeout(() => {
-        if (accumulatedUserSpeech.trim().length > 1 && !isAiSpeaking) {
-          const textToSend = accumulatedUserSpeech.trim();
-          accumulatedUserSpeech = '';
-
-          try { callRecognition.stop(); } catch (_) {}
-          callStatus.textContent = 'AI sedang berpikir...';
-          sendVoiceToAI(textToSend);
-        }
-      }, 1100);
+    // Jika kata final sudah didapat, kirim ke AI
+    if (final.trim().length > 1) {
+      const recognizedText = final.trim();
+      callStatus.textContent = 'AI sedang berpikir...';
+      sendVoiceToAI(recognizedText);
     }
   };
 
   callRecognition.onerror = (e) => {
+    console.warn('Call SR error:', e.error);
     if (isCalling && !isAiSpeaking && e.error !== 'not-allowed') {
       setTimeout(() => {
-        try { callRecognition.start(); } catch (_) {}
-      }, 350);
+        startListeningSafe();
+      }, 400);
     }
   };
 
   callRecognition.onend = () => {
+    // Restart mendengarkan jika panggilan aktif dan AI tidak sedang bicara
     if (isCalling && !isAiSpeaking) {
       setTimeout(() => {
-        try { callRecognition.start(); } catch (_) {}
-      }, 350);
+        startListeningSafe();
+      }, 300);
     }
   };
+}
+
+function startListeningSafe() {
+  if (!isCalling || isAiSpeaking || !callRecognition) return;
+  try {
+    callRecognition.start();
+    callStatus.textContent = 'Mendengarkan...';
+  } catch (_) {}
 }
 
 callBtn.addEventListener('click', async () => {
@@ -867,7 +924,6 @@ callBtn.addEventListener('click', async () => {
 async function startCall() {
   isCalling = true;
   isAiSpeaking = false;
-  accumulatedUserSpeech = '';
   callSeconds = 0;
   callTimer.textContent = '00:00';
   callOverlay.classList.remove('hidden');
@@ -920,7 +976,6 @@ function endCall() {
   triggerHaptic(20);
   isCalling = false;
   isAiSpeaking = false;
-  clearTimeout(silenceTimer);
   clearInterval(callInterval);
   cancelAnimationFrame(animFrameId);
 
@@ -996,18 +1051,16 @@ function speakCallResponse(text) {
   utter.lang = 'id-ID';
   utter.rate = parseFloat(speechRateRange?.value) || 1.05;
 
-  const resumeListening = () => {
+  const resumeTurn = () => {
     if (!isCalling) return;
+    isAiSpeaking = false;
     setTimeout(() => {
-      isAiSpeaking = false;
-      accumulatedUserSpeech = '';
-      callStatus.textContent = 'Mendengarkan...';
-      try { callRecognition.start(); } catch (_) {}
-    }, 450);
+      startListeningSafe();
+    }, 400);
   };
 
-  utter.onend = resumeListening;
-  utter.onerror = resumeListening;
+  utter.onend = resumeTurn;
+  utter.onerror = resumeTurn;
 
   window.speechSynthesis.speak(utter);
 }
