@@ -20,23 +20,26 @@
     body { background-color: #ffffff; color: #000000; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .prose p { margin-bottom: 0.65rem; }
     .prose p:last-child { margin-bottom: 0; }
-    .prose pre { background: #18181b; color: #ffffff; border: 1px solid #000; border-radius: 4px; padding: 0.75rem; margin: 0.75rem 0; overflow-x: auto; }
+    .prose pre { background: #18181b; color: #ffffff; border: 1px solid #000; border-radius: 4px; padding: 0.75rem; margin: 0.75rem 0; overflow-x: auto; position: relative; }
     .prose code { font-family: monospace; font-size: 0.85rem; }
     @keyframes recording { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .recording-active { animation: recording 1s infinite; background-color: #000000 !important; color: #ffffff !important; }
-    .loader-video { width: 32px; height: 32px; object-fit: cover; border-radius: 50%; border: 1px solid #000; }
+    .loader-video { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; border: 1px solid #000; }
+    /* Bottom Sheet Slide Up Animation */
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .animate-slide-up { animation: slideUp 0.25s ease-out forwards; }
   </style>
 </head>
-<body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-black overflow-hidden relative">
+<body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-black overflow-hidden relative select-none">
 
-  <!-- Header -->
+  <!-- Header Topbar -->
   <header class="h-14 border-b border-black flex items-center justify-between px-3 bg-white select-none shrink-0 z-10">
     <div class="flex items-center gap-2">
       <button id="menu-btn" class="p-1.5 border border-black hover:bg-neutral-100" title="Riwayat Chat">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       
-      <!-- Model Switcher -->
+      <!-- Pilihan Model AI -->
       <select id="model-select" class="border border-black text-xs p-1 font-bold bg-white focus:outline-none max-w-[130px] sm:max-w-none truncate">
         <option value="qwen/qwen3.8-max:free">Qwen 3.8 Max (Default)</option>
         <option value="sensenova/sensenova-6.8-flash-lite">SenseNova 6.8 Flash Lite</option>
@@ -62,26 +65,39 @@
     </div>
   </header>
 
-  <!-- Sidebar Drawer: Riwayat Percakapan -->
+  <!-- Sidebar Drawer: Riwayat Percakapan Multi-Session -->
   <div id="sidebar-drawer" class="fixed inset-0 z-40 bg-black/50 hidden">
-    <aside class="w-72 bg-white h-full border-r-2 border-black flex flex-col p-4 space-y-4">
+    <aside class="w-72 bg-white h-full border-r-2 border-black flex flex-col p-4 space-y-3">
       <div class="flex justify-between items-center border-b border-black pb-2">
-        <span class="font-bold text-sm uppercase">Riwayat Sesi Chat</span>
+        <span class="font-bold text-sm uppercase tracking-wider">Riwayat Sesi Chat</span>
         <button id="close-drawer-btn" class="font-bold text-sm p-1">✕</button>
       </div>
-      <div id="session-list" class="flex-1 overflow-y-auto space-y-2 text-xs"></div>
+      <p class="text-[10px] text-neutral-500 font-mono">* Tekan tahan pada sesi untuk Pin/Sematkan</p>
+      <div id="session-list" class="flex-1 overflow-y-auto space-y-2 text-xs select-none"></div>
       <button id="clear-all-sessions-btn" class="w-full text-xs py-2 border border-red-600 text-red-600 uppercase font-bold hover:bg-red-600 hover:text-white transition">
         Kosongkan Riwayat
       </button>
     </aside>
   </div>
 
-  <!-- Area Pesan -->
-  <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-    <div id="empty-state" class="text-center py-20">
+  <!-- Area Chat Pesan -->
+  <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative select-text">
+    <div id="empty-state" class="text-center py-20 select-none">
       <p class="text-sm font-semibold uppercase tracking-wider text-neutral-400">RZchat Workspace</p>
-      <p class="text-xs text-neutral-500 mt-1">Mendukung Telepon AI, Edit/Regenerate, Stop Generating, Multimodal & VN.</p>
+      <p class="text-xs text-neutral-500 mt-1">Mendukung Canvas Live Preview, Voice Call Waveform, Vision & Dokumen.</p>
     </div>
+  </div>
+
+  <!-- Floating Scroll-to-Bottom Button with Unread Dot -->
+  <button id="scroll-bottom-btn" class="hidden absolute right-6 bottom-20 z-20 w-9 h-9 bg-white border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-100 transition">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+    <span id="scroll-dot" class="hidden absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full border border-white"></span>
+  </button>
+
+  <!-- Auto-Retry on Failure Bar -->
+  <div id="retry-bar" class="hidden px-4 py-2 border-t-2 border-red-600 bg-red-50 text-xs flex items-center justify-between shrink-0">
+    <span class="text-red-700 font-bold">Koneksi terputus saat streaming.</span>
+    <button id="retry-btn" class="px-2 py-1 bg-red-600 text-white font-bold uppercase text-[10px] hover:bg-red-700">Coba Lanjutkan ↺</button>
   </div>
 
   <!-- Loading Bar Attachment -->
@@ -100,7 +116,7 @@
     <button id="remove-attachment-btn" type="button" class="text-xs font-bold uppercase underline">Batal</button>
   </div>
 
-  <!-- Stop Generating Floating Bar -->
+  <!-- Tombol Stop Generating -->
   <div id="stop-container" class="hidden pb-2 px-3 flex justify-center bg-white">
     <button id="stop-btn" type="button" class="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white text-xs font-bold uppercase tracking-wider shadow hover:bg-red-700 transition">
       <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg>
@@ -108,46 +124,128 @@
     </button>
   </div>
 
-  <!-- Footer Input -->
+  <!-- Input Form Footer -->
   <footer class="p-3 border-t border-black bg-white shrink-0">
     <form id="chat-form" class="flex items-end gap-2">
-      <label class="p-2 border border-black cursor-pointer hover:bg-neutral-100 transition shrink-0" title="Lampirkan File / Foto">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-        <input type="file" id="file-input" accept=".txt,.pdf,.md,.json,.png,.jpg,.jpeg,.webp" class="hidden">
-      </label>
+      <!-- Tombol Plus: Bottom Sheet Attachment Menu -->
+      <button type="button" id="attachment-menu-btn" class="p-2 border border-black hover:bg-neutral-100 transition shrink-0" title="Menu Lampiran">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      </button>
 
+      <!-- Input file tersembunyi -->
+      <input type="file" id="file-input-gallery" accept="image/*" class="hidden">
+      <input type="file" id="file-input-camera" accept="image/*" capture="environment" class="hidden">
+      <input type="file" id="file-input-docs" accept=".txt,.pdf,.md,.json" class="hidden">
+
+      <!-- Mic (Voice to Text) -->
       <button type="button" id="mic-btn" class="p-2 border border-black hover:bg-neutral-100 transition shrink-0" title="Voice Input">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
       </button>
 
-      <textarea id="user-input" rows="1" placeholder="Ketik pesan..." class="flex-1 border border-black p-2 text-sm resize-none focus:outline-none max-h-28 overflow-y-auto leading-normal"></textarea>
+      <!-- Textarea Pesan -->
+      <textarea id="user-input" rows="1" placeholder="Ketik pesan..." class="flex-1 border border-black p-2 text-sm resize-none focus:outline-none max-h-28 overflow-y-auto leading-normal select-text"></textarea>
 
+      <!-- Kirim Button -->
       <button type="submit" id="send-btn" class="px-4 py-2 bg-black text-white text-sm font-bold uppercase hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0">
         Kirim
       </button>
     </form>
   </footer>
 
+  <!-- Bottom Sheet Drawer Menu Lampiran (Ala Gemini) -->
+  <div id="bottom-sheet-overlay" class="fixed inset-0 bg-black/50 z-50 hidden flex flex-col justify-end">
+    <div class="bg-white border-t-2 border-black p-5 rounded-t-2xl space-y-4 animate-slide-up">
+      <div class="w-12 h-1 bg-neutral-300 rounded-full mx-auto"></div>
+      <div class="flex justify-between items-center pb-2 border-b border-black">
+        <h4 class="font-bold text-xs uppercase tracking-wider">Pilih Opsi Lampiran</h4>
+        <button id="close-bottom-sheet" class="font-bold text-sm">✕</button>
+      </div>
+      <div class="grid grid-cols-4 gap-3 py-2 text-center text-xs">
+        <button id="btn-opt-camera" class="flex flex-col items-center gap-1.5 p-2 border border-black hover:bg-neutral-100">
+          <span class="text-xl">📷</span>
+          <span class="font-semibold text-[11px]">Kamera</span>
+        </button>
+        <button id="btn-opt-gallery" class="flex flex-col items-center gap-1.5 p-2 border border-black hover:bg-neutral-100">
+          <span class="text-xl">🖼️</span>
+          <span class="font-semibold text-[11px]">Galeri</span>
+        </button>
+        <button id="btn-opt-doc" class="flex flex-col items-center gap-1.5 p-2 border border-black hover:bg-neutral-100">
+          <span class="text-xl">📄</span>
+          <span class="font-semibold text-[11px]">Dokumen</span>
+        </button>
+        <button id="btn-opt-genimg" class="flex flex-col items-center gap-1.5 p-2 border border-black hover:bg-neutral-100">
+          <span class="text-xl">🎨</span>
+          <span class="font-semibold text-[11px]">Buat Foto</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Undo Hapus Sesi -->
+  <div id="undo-toast" class="hidden fixed bottom-16 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-2 text-xs flex items-center gap-3 border border-white shadow-xl">
+    <span id="undo-toast-text">Sesi telah dihapus</span>
+    <button id="undo-btn" class="font-bold uppercase underline text-amber-400">Batalkan</button>
+  </div>
+
+  <!-- Modal Canvas: Live Web / Code Playground Sandbox -->
+  <div id="canvas-modal" class="hidden fixed inset-0 bg-white z-50 flex flex-col">
+    <div class="h-12 border-b border-black flex items-center justify-between px-4 bg-white shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-xs uppercase tracking-wider">Canvas: Live Playground</span>
+        <span class="text-[10px] bg-black text-white px-1.5 py-0.5 uppercase font-mono">HTML/JS Preview</span>
+      </div>
+      <button id="close-canvas-btn" class="font-bold text-sm px-2 py-1 border border-black hover:bg-black hover:text-white">✕ Tutup</button>
+    </div>
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <!-- Editor Kode -->
+      <div class="w-full md:w-1/2 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-black flex flex-col">
+        <div class="px-3 py-1.5 bg-neutral-100 border-b border-black text-xs font-mono font-bold flex justify-between items-center">
+          <span>KODE SUMBER</span>
+          <button id="refresh-canvas-btn" class="text-[10px] uppercase font-bold border border-black px-1.5 py-0.5 bg-white hover:bg-black hover:text-white">Jalankan Ulang ▶</button>
+        </div>
+        <textarea id="canvas-code-input" class="flex-1 p-3 font-mono text-xs focus:outline-none resize-none bg-neutral-50 leading-relaxed"></textarea>
+      </div>
+      <!-- Live Preview Iframe Sandbox -->
+      <div class="w-full md:w-1/2 h-1/2 md:h-full flex flex-col bg-neutral-100">
+        <div class="px-3 py-1.5 bg-neutral-200 border-b border-black text-xs font-mono font-bold">HASIL LANGSUNG (LIVE PREVIEW)</div>
+        <iframe id="canvas-iframe" class="flex-1 w-full h-full bg-white border-none" sandbox="allow-scripts allow-modals"></iframe>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Settings Lengkap -->
   <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white border-2 border-black max-w-md w-full p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-[90dvh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-black pb-2">
-        <h2 class="font-bold text-sm tracking-wider uppercase">Pengaturan & Info RZchat</h2>
+        <h2 class="font-bold text-sm tracking-wider uppercase">Pengaturan & Kontrol RZchat</h2>
         <button id="close-settings-btn" class="font-bold text-sm px-2 py-0.5 border border-black">✕</button>
       </div>
 
-      <!-- System Persona -->
-      <div class="space-y-1">
+      <!-- Temperature / Creativity Slider -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-center text-xs">
+          <label class="font-bold uppercase text-neutral-800">Kreativitas (Temperature): <span id="temp-val-display">0.7</span></label>
+        </div>
+        <input type="range" id="temp-range" min="0.0" max="1.5" step="0.1" value="0.7" class="w-full accent-black">
+        <div class="flex justify-between text-[10px] text-neutral-500 font-mono">
+          <span>0.0 (Presisi/Koding)</span>
+          <span>0.7 (Normal)</span>
+          <span>1.5 (Kreatif)</span>
+        </div>
+      </div>
+
+      <!-- Persona / Instruksi Sistem -->
+      <div class="space-y-1 pt-2 border-t border-neutral-200">
         <label class="font-bold text-xs uppercase block text-neutral-800">Persona / Instruksi Sistem</label>
-        <textarea id="system-prompt-input" rows="2" placeholder="Contoh: Anda adalah asisten coding ahli yang ringkas dan profesional..." class="w-full border border-black p-2 text-xs focus:outline-none"></textarea>
+        <textarea id="system-prompt-input" rows="2" placeholder="Contoh: Anda adalah asisten ahli coding yang ringkas dan profesional..." class="w-full border border-black p-2 text-xs focus:outline-none"></textarea>
       </div>
 
       <!-- Pengaturan Suara -->
       <div class="space-y-2 pt-2 border-t border-neutral-200">
-        <label class="font-bold text-xs uppercase block text-neutral-800">Pengaturan Suara Bicara</label>
+        <label class="font-bold text-xs uppercase block text-neutral-800">Kecepatan Bicara Suara AI</label>
         <div class="flex items-center justify-between text-xs">
-          <span>Kecepatan Bicara (Speed):</span>
-          <input type="range" id="speech-rate-range" min="0.8" max="1.5" step="0.1" value="1.0" class="w-32">
+          <span>Speed Rate:</span>
+          <input type="range" id="speech-rate-range" min="0.8" max="1.5" step="0.1" value="1.0" class="w-32 accent-black">
         </div>
       </div>
 
@@ -160,33 +258,32 @@
         </div>
       </div>
 
-      <!-- Info Model & Sistem -->
-      <div class="text-xs space-y-2 text-neutral-600 pt-2 border-t border-neutral-200">
-        <p><b class="text-black uppercase">Versi:</b> RZchat 2.5 (PWA Vision & Voice)</p>
-        <p><b class="text-black uppercase">Engine Model:</b> Multi-Model (Qwen, SenseNova, DeepSeek, MiniMax)</p>
-        <p><b class="text-black uppercase">Tips Izin Mic Android:</b> Jika mic tidak berfungsi, klik ikon setelan di samping link browser > Izin > Ubah Mikrofon menjadi Izinkan.</p>
+      <!-- Info Aplikasi -->
+      <div class="text-xs space-y-1 text-neutral-600 pt-2 border-t border-neutral-200 font-mono">
+        <p><b class="text-black uppercase">Versi:</b> RZchat 3.0 Pro</p>
+        <p><b class="text-black uppercase">Rate Limiting:</b> 15 req/menit per IP terproteksi</p>
       </div>
     </div>
   </div>
 
-  <!-- Fullscreen Voice Call Overlay (Teleponan AI) -->
+  <!-- Fullscreen Voice Call Overlay dengan Visualizer Waveform Nyata -->
   <div id="call-overlay" class="fixed inset-0 bg-white z-50 flex flex-col justify-between items-center p-8 hidden select-none">
-    <div class="text-center space-y-3 mt-6">
-      <div class="w-24 h-24 mx-auto border-2 border-black rounded-full p-2 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+    <div class="text-center space-y-2 mt-6">
+      <div class="w-20 h-20 mx-auto border-2 border-black rounded-full p-2 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
         <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-full h-full object-contain" alt="RZ">
       </div>
       <div>
         <h3 class="font-bold text-lg uppercase tracking-wider">RZchat Telepon</h3>
         <p id="call-status" class="text-xs font-mono text-neutral-500 uppercase">Menghubungkan panggilan...</p>
-        <p id="call-timer" class="text-sm font-mono font-bold mt-1">00:00</p>
+        <p id="call-timer" class="text-sm font-mono font-bold mt-0.5">00:00</p>
       </div>
     </div>
 
-    <!-- Animasi Video Call -->
-    <div class="flex flex-col items-center gap-3">
-      <video src="https://videotourl.com/videos/1788627788425-bbdd651d-20d3-4a0a-bd63-a27d0ca809cb.mp4" autoplay loop muted playsinline class="w-28 h-28 object-cover rounded-full border-2 border-black"></video>
-      <p id="call-live-text" class="text-xs text-center text-neutral-700 max-w-xs line-clamp-3 italic px-4">
-        "Katakan sesuatu untuk memulai obrolan..."
+    <!-- Live Real-Time Web Audio Waveform Canvas -->
+    <div class="flex flex-col items-center gap-3 w-full max-w-xs">
+      <canvas id="waveform-canvas" width="300" height="80" class="w-full border-b border-black"></canvas>
+      <p id="call-live-text" class="text-xs text-center text-neutral-700 max-w-xs line-clamp-3 italic px-2">
+        "Katakan sesuatu untuk memulai..."
       </p>
     </div>
 
