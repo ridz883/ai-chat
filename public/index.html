@@ -25,6 +25,27 @@
     @keyframes recording { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .recording-active { animation: recording 1s infinite; background-color: #000000 !important; color: #ffffff !important; }
     .loader-video { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; border: 1px solid #000000; }
+    
+    /* Animasi Waveform Native Ringan (Bebas Konflik Mic) */
+    @keyframes waveBar {
+      0%, 100% { height: 6px; }
+      50% { height: 36px; }
+    }
+    .wave-bar {
+      width: 4px;
+      background-color: #000000;
+      border-radius: 2px;
+      height: 6px;
+      transition: height 0.15s ease;
+    }
+    .wave-active .wave-bar:nth-child(1) { animation: waveBar 0.8s infinite 0.1s; }
+    .wave-active .wave-bar:nth-child(2) { animation: waveBar 0.7s infinite 0.2s; }
+    .wave-active .wave-bar:nth-child(3) { animation: waveBar 0.9s infinite 0.15s; }
+    .wave-active .wave-bar:nth-child(4) { animation: waveBar 0.6s infinite 0.3s; }
+    .wave-active .wave-bar:nth-child(5) { animation: waveBar 0.85s infinite 0.25s; }
+    .wave-active .wave-bar:nth-child(6) { animation: waveBar 0.75s infinite 0.05s; }
+    .wave-active .wave-bar:nth-child(7) { animation: waveBar 0.65s infinite 0.35s; }
+    .wave-active .wave-bar:nth-child(8) { animation: waveBar 0.8s infinite 0.18s; }
   </style>
 </head>
 <body class="flex flex-col h-[100dvh] max-w-4xl mx-auto border-x border-neutral-200 overflow-hidden relative select-none">
@@ -123,13 +144,12 @@
   <!-- Input Form Footer -->
   <footer class="p-3 border-t border-neutral-200 bg-white shrink-0">
     <form id="chat-form" class="flex items-end gap-1.5 sm:gap-2">
-      <!-- Input File Tersembunyi -->
-      <input type="file" id="input-gallery" accept="image/jpeg,image/png,image/webp,image/jpg" class="hidden">
+      <!-- Input File Dokumen / Media Universal: Memaksa Android memanggil DocumentsUI (File Manager Terbaru) -->
+      <input type="file" id="input-universal" accept="*/*" class="hidden">
       <input type="file" id="input-camera" accept="image/*" capture="environment" class="hidden">
-      <input type="file" id="input-doc" accept=".pdf,.txt,.md,.json" class="hidden">
 
-      <!-- Tombol Galeri Foto Langsung -->
-      <button type="button" id="btn-gallery" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Buka Galeri Foto">
+      <!-- Tombol Pilih Berkas / Galeri (DocumentsUI) -->
+      <button type="button" id="btn-gallery" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Buka File & Foto (Documents)">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -142,13 +162,6 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
           <circle cx="12" cy="13" r="3"/>
-        </svg>
-      </button>
-
-      <!-- Tombol Dokumen / PDF -->
-      <button type="button" id="btn-doc" class="p-2 border border-neutral-300 hover:bg-neutral-100 transition rounded shrink-0" title="Unggah Dokumen / PDF">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
         </svg>
       </button>
 
@@ -238,7 +251,7 @@
   <!-- Fullscreen Voice Call Overlay -->
   <div id="call-overlay" class="fixed inset-0 bg-white z-50 flex flex-col justify-between items-center p-8 hidden select-none">
     <div class="text-center space-y-2 mt-6">
-      <!-- Poin 2: Logo RZchat di Atas Tulisan RZchat Call -->
+      <!-- Logo RZchat Asli -->
       <div class="w-20 h-20 mx-auto rounded-full border border-neutral-200 p-2 flex items-center justify-center bg-white shadow-sm">
         <img src="https://i.ibb.co.com/BHf8jj3m/file-00000000cdd08211b0b7692d42ccf4ef.png" class="w-full h-full object-contain" alt="RZchat Logo">
       </div>
@@ -249,10 +262,22 @@
       </div>
     </div>
 
-    <!-- Poin 4: Video Animasi Loading & Waveform Canvas -->
+    <!-- Video Loader & CSS Animated Waveform (Bebas Konflik Audio Mic) -->
     <div class="flex flex-col items-center gap-4 w-full max-w-xs">
       <video id="call-loading-video" src="https://videotourl.com/videos/1788670557376-a9c3e8e5-7da0-4f74-abfe-6e415b0f227d.mp4" autoplay loop muted playsinline class="w-20 h-20 object-cover rounded-full border border-neutral-200 shadow-sm"></video>
-      <canvas id="waveform-canvas" width="280" height="48" class="w-full border-b border-neutral-300"></canvas>
+      
+      <!-- Waveform Bars Container -->
+      <div id="waveform-container" class="flex items-center justify-center gap-1.5 h-10 w-full border-b border-neutral-200 pb-2">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+
       <p id="call-live-text" class="text-xs text-center text-neutral-600 max-w-xs line-clamp-3 italic px-2">
         "Bicaralah untuk mulai mengobrol..."
       </p>
